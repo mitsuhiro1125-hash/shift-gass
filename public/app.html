@@ -1,0 +1,1799 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>シフト管理 - 給油所スタッフスケジュール</title>
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<link rel="apple-touch-icon" href="/icon.svg">
+<style>
+  :root{
+    --navy:#16233F;
+    --navy-light:#24365C;
+    --navy-lighter:#3A4E7A;
+    --amber:#E8963C;
+    --amber-dark:#C97A22;
+    --cream:#F6F3EC;
+    --white:#FFFFFF;
+    --red:#C0392B;
+    --red-bg:#FBEAE8;
+    --green:#3C8A5B;
+    --green-bg:#E9F4EE;
+    --line:#E3DED2;
+    --text:#22242A;
+    --muted:#767A84;
+    --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Segoe UI', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:var(--sans);
+    background:var(--cream);
+    color:var(--text);
+    min-height:100vh;
+  }
+  #app{min-height:100vh; display:flex; flex-direction:column;}
+
+  /* ---------- Login ---------- */
+  .login-wrap{
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(160deg,var(--navy) 0%, var(--navy-light) 55%, var(--navy-lighter) 100%);
+    padding:24px;
+  }
+  .login-card{
+    background:var(--white); border-radius:14px; padding:40px 36px; width:100%; max-width:380px;
+    box-shadow:0 20px 60px rgba(0,0,0,0.35);
+  }
+  .login-badge{
+    display:inline-flex; align-items:center; gap:8px; font-family:var(--mono); font-size:12px; letter-spacing:.12em;
+    color:var(--amber-dark); background:var(--red-bg); background:#FBF0E2; padding:4px 10px; border-radius:20px; margin-bottom:14px;
+  }
+  .login-title{font-size:22px; font-weight:800; margin:0 0 4px; letter-spacing:.02em;}
+  .login-sub{font-size:13px; color:var(--muted); margin:0 0 26px;}
+  .field{margin-bottom:16px;}
+  .field label{display:block; font-size:12px; color:var(--muted); margin-bottom:6px; font-weight:600;}
+  select, input[type=text], input[type=password], input[type=time], input[type=date], input[type=number]{
+    width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; font-size:14px; font-family:var(--sans);
+    background:var(--white); color:var(--text);
+  }
+  select:focus, input:focus{outline:none; border-color:var(--amber);}
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    padding:10px 18px; border-radius:8px; border:none; font-size:14px; font-weight:700; cursor:pointer;
+    font-family:var(--sans); transition:transform .08s ease, opacity .15s ease;
+  }
+  .btn:active{transform:scale(0.97);}
+  .btn-primary{background:var(--navy); color:var(--white); width:100%;}
+  .btn-primary:hover{background:var(--navy-light);}
+  .btn-amber{background:var(--amber); color:var(--navy);}
+  .btn-amber:hover{background:var(--amber-dark); color:var(--white);}
+  .btn-ghost{background:transparent; color:var(--navy); border:1.5px solid var(--line);}
+  .btn-ghost:hover{border-color:var(--navy);}
+  .btn-danger{background:var(--red-bg); color:var(--red);}
+  .btn-danger:hover{background:var(--red); color:var(--white);}
+  .btn-sm{padding:6px 12px; font-size:12px;}
+  .error-msg{color:var(--red); font-size:13px; margin:-6px 0 14px;}
+
+  /* ---------- Shell ---------- */
+  header.topbar{
+    background:var(--navy); color:var(--white); padding:14px 22px;
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;
+    position:sticky; top:0; z-index:20;
+  }
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand .dot{width:10px; height:10px; border-radius:50%; background:var(--amber);}
+  .brand-name{font-weight:800; font-size:15px; letter-spacing:.02em;}
+  .brand-sub{font-family:var(--mono); font-size:10px; color:#AEB9D6; letter-spacing:.1em;}
+  .user-chip{display:flex; align-items:center; gap:10px; font-size:13px;}
+  .user-chip .name{font-weight:700;}
+  .user-chip .role{font-family:var(--mono); font-size:10px; background:var(--amber); color:var(--navy); padding:2px 8px; border-radius:20px; font-weight:700;}
+
+  nav.tabs{
+    display:flex; gap:4px; background:var(--navy-light); padding:0 18px; overflow-x:auto;
+  }
+  nav.tabs button{
+    background:transparent; border:none; color:#C6CFE6; padding:12px 16px; font-size:13px; font-weight:700;
+    cursor:pointer; white-space:nowrap; border-bottom:3px solid transparent; font-family:var(--sans);
+  }
+  nav.tabs button.active{color:var(--white); border-bottom-color:var(--amber);}
+  nav.tabs button:hover{color:var(--white);}
+
+  main{flex:1; padding:24px; max-width:1100px; margin:0 auto; width:100%;}
+  .panel{background:var(--white); border:1px solid var(--line); border-radius:12px; padding:22px; margin-bottom:20px;}
+  .panel h2{margin:0 0 4px; font-size:17px; font-weight:800;}
+  .panel .desc{font-size:12.5px; color:var(--muted); margin:0 0 18px;}
+  .row{display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;}
+  .row > div{flex:1; min-width:140px;}
+
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  th, td{padding:9px 10px; border-bottom:1px solid var(--line); text-align:left;}
+  th{color:var(--muted); font-weight:700; font-size:11.5px; text-transform:uppercase; letter-spacing:.04em;}
+  tr:hover td{background:#FBFAF7;}
+  .tag{display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:700; font-family:var(--mono);}
+  .tag-hazmat{background:#FBF0E2; color:var(--amber-dark);}
+  .tag-student{background:#EAF0FB; color:#2F5AA8;}
+  .tag-off{background:#F1F1EE; color:var(--muted);}
+
+  /* ---------- Calendar ---------- */
+  .cal-header{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
+  .cal-header .month-label{font-size:16px; font-weight:800;}
+  .cal-nav{display:flex; gap:6px;}
+  .cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:6px;}
+
+  /* ---------- Vertical day list (staff-facing calendars) ---------- */
+  .day-list{max-height:56vh; overflow-y:auto; border:1px solid var(--line); border-radius:10px;}
+  .day-list-row{
+    display:flex; align-items:center; gap:14px; padding:11px 16px; border-bottom:1px solid var(--line);
+    cursor:pointer;
+  }
+  .day-list-row:last-child{border-bottom:none;}
+  .day-list-row:hover{background:#FBF6EC;}
+  .day-list-row.closed{background:#F7F5F0; cursor:default;}
+  .day-list-row.offday{background:var(--red-bg);}
+  .day-list-row.sun .day-list-date{color:var(--red);}
+  .day-list-row.sat .day-list-date{color:#2F5AA8;}
+  .day-list-date{width:92px; flex-shrink:0; font-weight:700; font-size:13.5px;}
+  .day-list-date .dow{font-size:11px; color:var(--muted); font-weight:400; margin-left:2px;}
+  .day-list-content{flex:1; display:flex; align-items:center; gap:10px; flex-wrap:wrap; min-width:0;}
+  .cal-dow{text-align:center; font-size:11px; font-weight:700; color:var(--muted); padding-bottom:4px;}
+  .cal-cell{
+    min-height:78px; border:1px solid var(--line); border-radius:8px; padding:6px; position:relative; background:var(--white);
+    cursor:pointer; display:flex; flex-direction:column; gap:4px;
+  }
+  .cal-cell.empty{background:transparent; border:none; cursor:default;}
+  .cal-cell.closed{background:#F1F1EE; cursor:default;}
+  .cal-cell .d-num{font-size:12px; font-weight:700; color:var(--text);}
+  .cal-cell.today .d-num{color:var(--amber-dark);}
+  .cal-cell.sun .d-num{color:var(--red);}
+  .cal-cell.sat .d-num{color:#2F5AA8;}
+  .cal-cell.offday{background:var(--red-bg);}
+  .cal-cell .off-label{font-size:10.5px; color:var(--red); font-weight:700;}
+  .cal-cell .time-badges{display:flex; flex-direction:column; gap:2px;}
+  .time-badge{
+    font-family:var(--mono); font-size:10.5px; background:var(--navy); color:var(--amber); padding:2px 5px;
+    border-radius:4px; display:flex; justify-content:space-between; gap:4px;
+  }
+  .time-badge.ot{background:var(--red);}
+  .cal-cell .warn-dot{position:absolute; top:5px; right:5px; width:7px; height:7px; border-radius:50%; background:var(--red);}
+  .cal-cell .clear-x{position:absolute; top:3px; right:5px; font-size:11px; color:var(--muted); cursor:pointer;}
+  .clear-x{font-size:13px; color:var(--muted); cursor:pointer; padding:0 2px;}
+  .clear-x:hover{color:var(--red);}
+  .cal-cell small.time-range-edit{display:flex; gap:2px; margin-top:2px;}
+  .cal-cell small.time-range-edit input{font-size:10px; padding:2px; width:100%;}
+
+  /* ---------- Modal ---------- */
+  .modal-backdrop{
+    position:fixed; inset:0; background:rgba(22,35,63,0.55); display:flex; align-items:center; justify-content:center;
+    z-index:100; padding:16px;
+  }
+  .modal{background:var(--white); border-radius:12px; width:100%; max-width:460px; max-height:88vh; overflow-y:auto; padding:24px;}
+  .modal.modal-wide{max-width:min(96vw, 1200px);}
+  .modal h3{margin:0 0 14px; font-size:16px; font-weight:800;}
+  .modal-close{position:sticky; top:0; float:right; background:none; border:none; font-size:18px; cursor:pointer; color:var(--muted);}
+  .assign-row{display:flex; gap:8px; align-items:center; margin-bottom:8px; padding:8px; background:var(--cream); border-radius:8px;}
+  .assign-row .nm{flex:1; font-size:13px; font-weight:700;}
+  .assign-row input[type=time]{width:88px;}
+
+  .toast{
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--navy); color:var(--white);
+    padding:10px 20px; border-radius:8px; font-size:13px; font-weight:600; z-index:200; box-shadow:0 8px 24px rgba(0,0,0,0.3);
+  }
+  .empty-state{text-align:center; padding:40px 20px; color:var(--muted); font-size:13px;}
+  .badge-count{display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 5px; background:var(--red); color:var(--white); border-radius:10px; font-size:10px; font-weight:800; margin-left:4px;}
+  .legend{display:flex; gap:14px; flex-wrap:wrap; font-size:11.5px; color:var(--muted); margin-top:10px;}
+  .legend span{display:inline-flex; align-items:center; gap:5px;}
+  .legend i{width:10px; height:10px; border-radius:3px; display:inline-block;}
+  .hint{font-size:11.5px; color:var(--muted); margin-top:8px; line-height:1.6;}
+  .day-toggle-row{display:flex; gap:6px; margin-top:6px;}
+
+  /* ---------- Staff x Day grid (scheduler) ---------- */
+  .grid-wrap{overflow-x:auto; border:1px solid var(--line); border-radius:10px; max-width:100%;}
+  table.grid-table{border-collapse:collapse; font-size:11.5px; width:100%;}
+  table.grid-table th, table.grid-table td{border:1px solid var(--line); padding:4px 3px; text-align:center; white-space:nowrap;}
+  table.grid-table thead th{background:var(--cream); position:sticky; top:0; z-index:3; font-weight:700; font-size:11px;}
+  table.grid-table td.staff-col, table.grid-table th.staff-col{
+    position:sticky; left:0; background:var(--white); z-index:2; text-align:left; font-weight:700; min-width:96px; font-size:12px;
+  }
+  table.grid-table thead th.staff-col{ z-index:4; }
+  table.grid-table td.daycell{min-width:58px; height:38px; cursor:pointer;}
+  table.grid-table td.daycell:hover{background:#FBF6EC;}
+  .shift-chip{display:inline-block; border-radius:5px; padding:2px 5px; font-family:var(--mono); font-size:10px; color:#fff; line-height:1.4; font-weight:700;}
+  tr.summary-row td{background:var(--cream); font-weight:800; font-size:11px;}
+  .shortage-neg{color:var(--red);}
+  .shortage-mid{color:var(--amber-dark);}
+  .shortage-pos{color:var(--green);}
+  .offreq-mark{color:var(--red); font-size:10px; font-weight:700;}
+
+  /* ---------- Gantt drag editor (day modal) ---------- */
+  .gantt-wrap{margin-top:14px;}
+  .gantt-ruler{display:flex; margin-bottom:4px;}
+  .gantt-ruler-spacer{width:96px; flex-shrink:0;}
+  .gantt-ruler-hours{position:relative; flex:1; height:16px;}
+  .gantt-ruler-hours span{position:absolute; transform:translateX(-50%); font-size:10.5px; color:var(--muted); font-family:var(--mono);}
+  .gantt-row{display:flex; align-items:center; gap:8px; margin-bottom:8px;}
+  .gantt-row-label{width:96px; flex-shrink:0; font-size:12.5px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .gantt-track{
+    position:relative; flex:1; height:34px; background:var(--cream); border-radius:7px;
+    background-image: repeating-linear-gradient(to right, var(--line) 0, var(--line) 1px, transparent 1px, transparent calc(100%/13));
+  }
+  .gantt-bar{
+    position:absolute; top:3px; bottom:3px; border-radius:6px; display:flex; align-items:center; justify-content:center;
+    cursor:grab; min-width:16px; box-shadow:0 1px 3px rgba(0,0,0,0.25); touch-action:none;
+  }
+  .gantt-bar:active{cursor:grabbing;}
+  .gantt-bar-label{font-family:var(--mono); font-size:11px; color:#fff; font-weight:700; pointer-events:none; white-space:nowrap;}
+  .gantt-handle{position:absolute; top:0; bottom:0; width:10px; cursor:ew-resize; touch-action:none;}
+  .gantt-handle-left{left:-3px;}
+  .gantt-handle-right{right:-3px;}
+  .day-toggle-row label{display:flex; align-items:center; gap:4px; font-size:11px; padding:4px 8px; border:1px solid var(--line); border-radius:6px; cursor:pointer;}
+  .day-toggle-row input{margin:0;}
+  .weekday-pattern-row{display:grid; grid-template-columns:60px 1fr 100px 100px; gap:8px; align-items:center; padding:6px 0; border-bottom:1px solid var(--line); font-size:12.5px;}
+  .weekday-pattern-row:last-child{border-bottom:none;}
+  .stat-cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:6px;}
+  .stat-card{background:var(--cream); border-radius:10px; padding:14px;}
+  .stat-card .num{font-family:var(--mono); font-size:22px; font-weight:800; color:var(--navy);}
+  .stat-card .lbl{font-size:11px; color:var(--muted); margin-top:2px;}
+  .stat-card.ot .num{color:var(--red);}
+  @media(max-width:640px){
+    .cal-cell{min-height:64px; padding:4px;}
+    .time-badge{font-size:9px;}
+    main{padding:14px;}
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* ============================= STORAGE HELPERS ============================= */
+async function storeGet(key){
+  try{
+    const res = await fetch('/api/kv?key='+encodeURIComponent(key));
+    if(!res.ok){ console.error('storeGet failed', key, res.status, await res.text()); return null; }
+    const data = await res.json();
+    return data.value ? JSON.parse(data.value) : null;
+  }catch(e){ console.error('storeGet error', key, e); return null; }
+}
+async function storeSet(key, value){
+  try{
+    const res = await fetch('/api/kv', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ key, value: JSON.stringify(value) })
+    });
+    if(!res.ok){
+      console.error('storeSet failed', key, res.status, await res.text());
+      showToast('⚠ 保存に失敗しました。通信環境をご確認のうえ、もう一度お試しください。');
+      return false;
+    }
+    return true;
+  }catch(e){
+    console.error('storeSet error', key, e);
+    showToast('⚠ 保存に失敗しました。通信環境をご確認のうえ、もう一度お試しください。');
+    return false;
+  }
+}
+
+/* ============================= CONSTANTS ============================= */
+const WEEKDAYS = ['日','月','火','水','木','金','土'];
+const WD_KEYS = ['sun','mon','tue','wed','thu','fri','sat'];
+const OPEN_HOUR = 7, CLOSE_HOUR = 20; // 営業時間 7:00-20:00
+const HOURS = []; for(let h=OPEN_HOUR; h<CLOSE_HOUR; h++) HOURS.push(h);
+
+function pad(n){ return n.toString().padStart(2,'0'); }
+function dateStr(y,m,d){ return `${y}-${pad(m+1)}-${pad(d)}`; }
+function monthKey(y,m){ return `${y}-${pad(m+1)}`; }
+function toMin(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
+function toTimeStr(min){ return `${pad(Math.floor(min/60))}:${pad(min%60)}`; }
+function hoursInRange(startMin, endMin){
+  const hrs = [];
+  for(let h=Math.max(OPEN_HOUR,Math.floor(startMin/60)); h<Math.min(CLOSE_HOUR,Math.ceil(endMin/60)); h++) hrs.push(h);
+  return hrs;
+}
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+
+function defaultBasePattern(){
+  const p = {};
+  WD_KEYS.forEach(k=>{ p[k] = { available:true, start:'07:00', end:'20:00' }; });
+  return p;
+}
+function defaultHourlyRequirement(){
+  // 7..19 開始時刻キー（理想人数のデフォルト）
+  return {7:1,8:2,9:2,10:2,11:2,12:2,13:2,14:2,15:2,16:2,17:2,18:2,19:1};
+}
+function defaultHourlyMinRequirement(){
+  // 最低人数のデフォルト（理想より少なめの、割れない下限）
+  return {7:1,8:1,9:1,10:1,11:1,12:1,13:1,14:1,15:1,16:1,17:1,18:1,19:1};
+}
+
+/* ============================= APP STATE ============================= */
+const state = {
+  currentUser: null, // staff object
+  view: 'login',
+  activeTab: null,
+  cursorYear: new Date().getFullYear(),
+  cursorMonth: new Date().getMonth(), // 0-index
+  staffList: [],
+  storeSettings: null,
+  toast: null,
+};
+
+async function loadCoreData(){
+  state.staffList = await storeGet('staff_list') || [];
+  state.storeSettings = await storeGet('store_settings') || { closedWeekdays: [], hourlyRequirement: defaultHourlyRequirement(), hourlyMinRequirement: defaultHourlyMinRequirement(), studentCutoffHour: 20, maxShiftHours: 11 };
+  if(state.storeSettings.maxShiftHours == null) state.storeSettings.maxShiftHours = 11;
+  if(!state.storeSettings.hourlyMinRequirement) state.storeSettings.hourlyMinRequirement = defaultHourlyMinRequirement();
+}
+
+function showToast(msg){
+  state.toast = msg;
+  render();
+  setTimeout(()=>{ state.toast = null; render(); }, 2200);
+}
+
+/* ============================= INIT ============================= */
+async function init(){
+  await loadCoreData();
+  // 初回起動時、スタッフが0人ならA〜Hのデフォルトメンバーを作成する
+  if(state.staffList.length === 0){
+    const defaults = [
+      { name:'A', isAdmin:true,  hazmat:true,  employment:'fulltime' },
+      { name:'B', isAdmin:false, hazmat:true,  employment:'fulltime' },
+      { name:'C', isAdmin:false, hazmat:true,  employment:'fulltime' },
+      { name:'D', isAdmin:false, hazmat:false, employment:'fulltime' },
+      { name:'E', isAdmin:false, hazmat:false, employment:'parttime' },
+      { name:'F', isAdmin:false, hazmat:false, employment:'parttime' },
+      { name:'G', isAdmin:false, hazmat:true,  employment:'parttime' },
+      { name:'H', isAdmin:false, hazmat:false, employment:'parttime' },
+    ];
+    state.staffList = defaults.map(d => ({
+      id: uid(), name: d.name, password: '0000', isAdmin: d.isAdmin, hazmat: d.hazmat, isNewbie: false,
+      employment: d.employment, isStudent: false,
+      hourlyWage: d.employment==='fulltime' ? 0 : 1000,
+      minGuaranteeWage: 0,
+      desiredMonthlyHours: 0,
+      otProhibited: false,
+      monthlyOTLimit: d.employment==='fulltime' ? 40 : 0,
+      basePattern: defaultBasePattern()
+    }));
+    await storeSet('staff_list', state.staffList);
+  }
+  render();
+}
+
+/* ============================= RENDER ROOT ============================= */
+function render(){
+  const app = document.getElementById('app');
+  if(state.view === 'login'){
+    app.innerHTML = renderLogin();
+    bindLogin();
+  } else {
+    app.innerHTML = renderShell();
+    bindShell();
+  }
+  if(state.toast){
+    const t = document.createElement('div');
+    t.className='toast'; t.textContent = state.toast;
+    document.body.appendChild(t);
+  }
+}
+
+/* ============================= LOGIN ============================= */
+function renderLogin(){
+  let lastStaffId = '';
+  try{ lastStaffId = localStorage.getItem('lastStaffId') || ''; }catch(e){}
+  const options = state.staffList.map(s=>`<option value="${s.id}" ${s.id===lastStaffId?'selected':''}>${escapeHtml(s.name)}</option>`).join('');
+  return `
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-badge">⛽ SHIFT CONTROL</div>
+      <h1 class="login-title">シフト管理システム</h1>
+      <p class="login-sub">お名前とパスワードを選択・入力してください</p>
+      <form id="loginForm">
+        <div class="field">
+          <label>スタッフ名</label>
+          <select id="loginName" required>${options}</select>
+        </div>
+        <div class="field">
+          <label>パスワード</label>
+          <input type="password" id="loginPass" required placeholder="パスワード">
+        </div>
+        <div id="loginError" class="error-msg" style="display:none;">名前またはパスワードが違います</div>
+        <button type="submit" class="btn btn-primary">ログイン</button>
+      </form>
+    </div>
+  </div>`;
+}
+function bindLogin(){
+  document.getElementById('loginForm').addEventListener('submit', (e)=>{
+    e.preventDefault();
+    const id = document.getElementById('loginName').value;
+    const pass = document.getElementById('loginPass').value;
+    const staff = state.staffList.find(s=>s.id===id);
+    if(staff && staff.password === pass){
+      try{ localStorage.setItem('lastStaffId', staff.id); }catch(e){}
+      state.currentUser = staff;
+      state.view = staff.isAdmin ? 'admin' : 'staff';
+      state.activeTab = staff.isAdmin ? 'staffmaster' : 'myschedule';
+      render();
+    } else {
+      document.getElementById('loginError').style.display='block';
+    }
+  });
+}
+
+/* ============================= SHELL (topbar + tabs) ============================= */
+function renderShell(){
+  const isAdmin = state.currentUser.isAdmin;
+  const adminTabs = [
+    ['staffmaster','スタッフマスタ'],
+    ['storesettings','店舗設定'],
+    ['monthsettings','月次設定'],
+    ['requestproxy','希望休（代理入力）'],
+    ['scheduler','シフト作成・確認'],
+  ];
+  const staffTabs = [
+    ['myschedule','マイシフト'],
+    ['request','希望休入力'],
+  ];
+  const tabs = isAdmin ? adminTabs : staffTabs;
+  return `
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot"></span>
+      <div>
+        <div class="brand-name">シフト管理システム</div>
+        <div class="brand-sub">STATION STAFF SCHEDULER</div>
+      </div>
+    </div>
+    <div class="user-chip">
+      <span class="name">${escapeHtml(state.currentUser.name)}</span>
+      <span class="role">${isAdmin ? '管理者' : 'スタッフ'}</span>
+      <button class="btn btn-ghost btn-sm" id="pwChangeBtn" style="color:#fff;border-color:#425380;">パスワード変更</button>
+      <button class="btn btn-ghost btn-sm" id="logoutBtn" style="color:#fff;border-color:#425380;">ログアウト</button>
+    </div>
+  </header>
+  <nav class="tabs">
+    ${tabs.map(([k,l])=>`<button data-tab="${k}" class="${state.activeTab===k?'active':''}">${l}</button>`).join('')}
+  </nav>
+  <main id="mainArea">読み込み中...</main>
+  <div id="pwModalHost"></div>
+  `;
+}
+function bindShell(){
+  document.getElementById('logoutBtn').addEventListener('click', ()=>{
+    state.currentUser=null; state.view='login'; render();
+  });
+  document.getElementById('pwChangeBtn').addEventListener('click', openPasswordModal);
+  document.querySelectorAll('nav.tabs button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      state.activeTab = btn.dataset.tab;
+      document.querySelectorAll('nav.tabs button').forEach(b=> b.classList.toggle('active', b===btn));
+      renderMain();
+    });
+  });
+  renderMain();
+}
+
+function openPasswordModal(){
+  const host = document.getElementById('pwModalHost');
+  host.innerHTML = `
+  <div class="modal-backdrop">
+    <div class="modal">
+      <button class="modal-close" id="closePwModal">×</button>
+      <h3>パスワード変更</h3>
+      <div class="field"><label>現在のパスワード</label><input type="password" id="pw_current"></div>
+      <div class="field"><label>新しいパスワード</label><input type="password" id="pw_new"></div>
+      <div class="field"><label>新しいパスワード（確認）</label><input type="password" id="pw_confirm"></div>
+      <div id="pwError" class="error-msg" style="display:none;"></div>
+      <div style="display:flex; gap:8px; margin-top:6px;">
+        <button class="btn btn-primary" id="savePwBtn">変更する</button>
+        <button class="btn btn-ghost" id="cancelPwBtn">キャンセル</button>
+      </div>
+    </div>
+  </div>`;
+  const closeIt = ()=> host.innerHTML='';
+  document.getElementById('closePwModal').addEventListener('click', closeIt);
+  document.getElementById('cancelPwBtn').addEventListener('click', closeIt);
+  document.getElementById('savePwBtn').addEventListener('click', async ()=>{
+    const cur = document.getElementById('pw_current').value;
+    const nw = document.getElementById('pw_new').value;
+    const cf = document.getElementById('pw_confirm').value;
+    const errEl = document.getElementById('pwError');
+    if(cur !== state.currentUser.password){ errEl.textContent='現在のパスワードが違います'; errEl.style.display='block'; return; }
+    if(!nw || nw.length < 1){ errEl.textContent='新しいパスワードを入力してください'; errEl.style.display='block'; return; }
+    if(nw !== cf){ errEl.textContent='確認用パスワードが一致しません'; errEl.style.display='block'; return; }
+    const idx = state.staffList.findIndex(s=>s.id===state.currentUser.id);
+    if(idx<0) return;
+    state.staffList[idx] = { ...state.staffList[idx], password: nw };
+    state.currentUser = state.staffList[idx];
+    await storeSet('staff_list', state.staffList);
+    closeIt();
+    showToast('パスワードを変更しました');
+  });
+}
+
+async function renderMain(){
+  const area = document.getElementById('mainArea');
+  if(!area) return;
+  switch(state.activeTab){
+    case 'staffmaster': area.innerHTML = renderStaffMaster(); bindStaffMaster(); break;
+    case 'storesettings': area.innerHTML = renderStoreSettings(); bindStoreSettings(); break;
+    case 'monthsettings': area.innerHTML = await renderMonthSettings(); bindMonthSettings(); break;
+    case 'scheduler': area.innerHTML = await renderScheduler(); bindScheduler(); break;
+    case 'request': area.innerHTML = await renderRequestInput(); bindRequestInput(); break;
+    case 'requestproxy': {
+      if(!state.requestProxyStaffId) state.requestProxyStaffId = state.staffList[0]?.id;
+      area.innerHTML = await renderRequestInput(state.requestProxyStaffId);
+      bindRequestInput(state.requestProxyStaffId);
+      break;
+    }
+    case 'myschedule': area.innerHTML = await renderMySchedule(); bindMySchedule(); break;
+  }
+}
+
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ============================= 1. スタッフマスタ管理 ============================= */
+function renderStaffMaster(){
+  const rows = state.staffList.map(s=>`
+    <tr>
+      <td><strong>${escapeHtml(s.name)}</strong>${s.isAdmin?' <span class="tag" style="background:#EDE7F6;color:#5B3E96;">管理者</span>':''}${s.isNewbie?' <span class="tag" style="background:#FFF3D6;color:#9A6B00;">新人</span>':''}</td>
+      <td>${s.hazmat ? '<span class="tag tag-hazmat">危険物取扱</span>' : '<span class="tag tag-off">-</span>'}</td>
+      <td>${({fulltime:'正社員',parttime:'パート',student:'学生'})[s.employment] || s.employment}</td>
+      <td>${offDaysLabel(s)}</td>
+      <td style="font-family:var(--mono);">${s.employment==='fulltime' ? '-' : '¥'+Number(s.hourlyWage||0).toLocaleString()+'/h'}</td>
+      <td style="font-family:var(--mono);">${s.employment==='fulltime' ? (s.otProhibited ? '残業不可' : (Number(s.monthlyOTLimit||40)+'h/月まで残業可')) : (s.minGuaranteeWage ? '¥'+Number(s.minGuaranteeWage).toLocaleString() : '-')}</td>
+      <td style="text-align:right;">
+        <button class="btn btn-ghost btn-sm" data-edit="${s.id}">編集</button>
+        <button class="btn btn-danger btn-sm" data-del="${s.id}">削除</button>
+      </td>
+    </tr>
+  `).join('');
+  return `
+  <div class="panel">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+      <div>
+        <h2>スタッフマスタ管理</h2>
+        <p class="desc">在籍スタッフ ${state.staffList.length}名 / 名前・資格・固定休み・基本稼働パターンを登録します（正社員は必要休日数、パート・学生は時給・最低保証賃金を設定）</p>
+      </div>
+      <button class="btn btn-amber" id="addStaffBtn">＋ スタッフを追加</button>
+    </div>
+    <table>
+      <thead><tr><th>名前</th><th>危険物資格</th><th>雇用形態</th><th>固定休み</th><th>時給</th><th>最低保証/残業条件</th><th></th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="7" class="empty-state">スタッフが登録されていません</td></tr>'}</tbody>
+    </table>
+  </div>
+  <div id="staffModalHost"></div>
+  `;
+}
+function offDaysLabel(s){
+  const offs = WD_KEYS.filter(k=> !s.basePattern[k].available).map(k=>WEEKDAYS[WD_KEYS.indexOf(k)]);
+  return offs.length ? offs.join('・') : 'なし';
+}
+function bindStaffMaster(){
+  document.getElementById('addStaffBtn').addEventListener('click', ()=> openStaffModal(null));
+  document.querySelectorAll('[data-edit]').forEach(b=> b.addEventListener('click', ()=> openStaffModal(b.dataset.edit)));
+  document.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', async ()=>{
+    if(confirm('このスタッフを削除しますか？')){
+      state.staffList = state.staffList.filter(s=>s.id!==b.dataset.del);
+      await storeSet('staff_list', state.staffList);
+      renderMain();
+      showToast('スタッフを削除しました');
+    }
+  }));
+}
+function openStaffModal(id){
+  const editing = id ? state.staffList.find(s=>s.id===id) : null;
+  const s = editing || { id: uid(), name:'', password:'', isAdmin:false, hazmat:false, isNewbie:false, employment:'parttime', isStudent:false, hourlyWage:1000, minGuaranteeWage:0, desiredMonthlyHours:0, otProhibited:false, monthlyOTLimit:40, basePattern: defaultBasePattern() };
+  const host = document.getElementById('staffModalHost');
+  host.innerHTML = `
+  <div class="modal-backdrop">
+    <div class="modal">
+      <button class="modal-close" id="closeStaffModal">×</button>
+      <h3>${editing? 'スタッフ編集' : 'スタッフ追加'}</h3>
+      <div class="field"><label>氏名</label><input type="text" id="f_name" value="${escapeHtml(s.name)}"></div>
+      <div class="field"><label>ログインパスワード</label><input type="text" id="f_pass" value="${escapeHtml(s.password)}"></div>
+      <div class="row">
+        <div class="field"><label>雇用形態</label>
+          <select id="f_emp">
+            <option value="fulltime" ${s.employment==='fulltime'?'selected':''}>正社員</option>
+            <option value="parttime" ${s.employment==='parttime'?'selected':''}>パート</option>
+            <option value="student" ${s.employment==='student'?'selected':''}>学生</option>
+          </select>
+        </div>
+      </div>
+      <div id="wageFields" class="row" style="display:${s.employment==='fulltime'?'none':'flex'};">
+        <div class="field"><label>時給（円）</label><input type="number" min="0" step="1" id="f_wage" value="${s.hourlyWage ?? 1000}"></div>
+        <div class="field"><label>最低保証賃金（円／月）</label><input type="number" min="0" step="100" id="f_guarantee" value="${s.minGuaranteeWage ?? 0}"></div>
+        <div class="field"><label>希望月間総労働時間（時間）</label><input type="number" min="0" step="1" id="f_desiredhours" value="${s.desiredMonthlyHours ?? 0}"></div>
+      </div>
+      <p id="wageHint" class="hint" style="margin-top:-8px; display:${s.employment==='fulltime'?'none':'block'};">最低保証賃金や希望月間総労働時間を入力すると、自動シフト作成時にできるだけその条件を満たすように優先的にシフトが追加されます（0なら特に指定なし）。</p>
+      <div id="fulltimeFields" style="display:${s.employment==='fulltime'?'block':'none'};">
+        <div class="row">
+          <div class="field" style="max-width:220px;">
+            <label>月間残業可能時間（時間）</label>
+            <input type="number" min="0" max="80" step="1" id="f_otlimit" value="${s.monthlyOTLimit ?? 40}" ${s.otProhibited?'disabled':''}>
+          </div>
+        </div>
+        <label style="font-size:12px; display:flex; align-items:center; gap:6px; margin-top:4px;">
+          <input type="checkbox" id="f_otprohibited" ${s.otProhibited?'checked':''}> 残業不可（1日9時間を超える勤務をさせない）
+        </label>
+      </div>
+      <p id="fulltimeHint" class="hint" style="margin-top:6px; display:${s.employment==='fulltime'?'block':'none'};">正社員の必要休日数は、スタッフ個人ではなく「月次設定」で毎月まとめて設定します。</p>
+      <div class="day-toggle-row">
+        <label><input type="checkbox" id="f_hazmat" ${s.hazmat?'checked':''}> 危険物取扱資格あり</label>
+        <label><input type="checkbox" id="f_newbie" ${s.isNewbie?'checked':''}> 新人（社員がいる時のみ配置）</label>
+        <label><input type="checkbox" id="f_admin" ${s.isAdmin?'checked':''}> 管理者権限</label>
+      </div>
+      <h3 style="margin-top:20px;font-size:13px;">曜日ごとの基本稼働パターン</h3>
+      <p class="desc" style="margin-bottom:6px;">休みの曜日はチェックを外してください。稼働する曜日は対応可能な時間帯を入力（例：平日午前のみ→09:00〜13:00）</p>
+      <div id="patternRows">
+        ${WD_KEYS.map((k,i)=>`
+          <div class="weekday-pattern-row">
+            <span><strong>${WEEKDAYS[i]}</strong></span>
+            <label style="font-size:12px;"><input type="checkbox" data-wd="${k}" class="wd-enabled" ${s.basePattern[k].available?'checked':''}> 稼働可</label>
+            <input type="time" data-wd="${k}" class="wd-start" value="${s.basePattern[k].start}" ${!s.basePattern[k].available?'disabled':''}>
+            <input type="time" data-wd="${k}" class="wd-end" value="${s.basePattern[k].end}" ${!s.basePattern[k].available?'disabled':''}>
+          </div>
+        `).join('')}
+      </div>
+      <div style="display:flex; gap:8px; margin-top:20px;">
+        <button class="btn btn-primary" id="saveStaffBtn">保存</button>
+        <button class="btn btn-ghost" id="cancelStaffBtn">キャンセル</button>
+      </div>
+    </div>
+  </div>`;
+  host.querySelectorAll('.wd-enabled').forEach(cb=>{
+    cb.addEventListener('change', ()=>{
+      const wd = cb.dataset.wd;
+      host.querySelector(`.wd-start[data-wd="${wd}"]`).disabled = !cb.checked;
+      host.querySelector(`.wd-end[data-wd="${wd}"]`).disabled = !cb.checked;
+    });
+  });
+  document.getElementById('f_emp').addEventListener('change', (e)=>{
+    const isFulltime = e.target.value === 'fulltime';
+    document.getElementById('wageFields').style.display = isFulltime ? 'none' : 'flex';
+    document.getElementById('wageHint').style.display = isFulltime ? 'none' : 'block';
+    document.getElementById('fulltimeFields').style.display = isFulltime ? 'block' : 'none';
+    document.getElementById('fulltimeHint').style.display = isFulltime ? 'block' : 'none';
+  });
+  document.getElementById('f_otprohibited').addEventListener('change', (e)=>{
+    document.getElementById('f_otlimit').disabled = e.target.checked;
+  });
+  document.getElementById('closeStaffModal').addEventListener('click', ()=> host.innerHTML='');
+  document.getElementById('cancelStaffBtn').addEventListener('click', ()=> host.innerHTML='');
+  document.getElementById('saveStaffBtn').addEventListener('click', async ()=>{
+    const name = document.getElementById('f_name').value.trim();
+    if(!name){ alert('氏名を入力してください'); return; }
+    const newPattern = {};
+    WD_KEYS.forEach(k=>{
+      const enabled = host.querySelector(`.wd-enabled[data-wd="${k}"]`).checked;
+      const start = host.querySelector(`.wd-start[data-wd="${k}"]`).value || '07:00';
+      const end = host.querySelector(`.wd-end[data-wd="${k}"]`).value || '20:00';
+      newPattern[k] = { available: enabled, start, end };
+    });
+    const employment = document.getElementById('f_emp').value;
+    const isFulltime = employment === 'fulltime';
+    const otProhibited = isFulltime ? document.getElementById('f_otprohibited').checked : false;
+    const updated = {
+      id: s.id, name,
+      password: document.getElementById('f_pass').value || '0000',
+      isAdmin: document.getElementById('f_admin').checked,
+      hazmat: document.getElementById('f_hazmat').checked,
+      isNewbie: document.getElementById('f_newbie').checked,
+      employment,
+      isStudent: employment === 'student',
+      hourlyWage: isFulltime ? 0 : (Number(document.getElementById('f_wage').value) || 0),
+      minGuaranteeWage: isFulltime ? 0 : (Number(document.getElementById('f_guarantee').value) || 0),
+      desiredMonthlyHours: isFulltime ? 0 : (Number(document.getElementById('f_desiredhours').value) || 0),
+      otProhibited,
+      monthlyOTLimit: isFulltime ? (otProhibited ? 0 : (Number(document.getElementById('f_otlimit').value) || 40)) : 0,
+      basePattern: newPattern
+    };
+    const idx = state.staffList.findIndex(x=>x.id===s.id);
+    if(idx>=0) state.staffList[idx]=updated; else state.staffList.push(updated);
+    await storeSet('staff_list', state.staffList);
+    host.innerHTML='';
+    renderMain();
+    showToast('スタッフ情報を保存しました');
+  });
+}
+
+/* ============================= 2. 店舗設定 ============================= */
+function renderStoreSettings(){
+  const ss = state.storeSettings;
+  return `
+  <div class="panel">
+    <h2>店舗設定</h2>
+    <p class="desc">営業時間は 7:00〜20:00 固定です。店舗の定休日と、時間帯ごとの必要人数を設定してください。</p>
+    <h3 style="font-size:13px;">店舗の定休日（曜日）</h3>
+    <div class="day-toggle-row" id="closedWdRow">
+      ${WEEKDAYS.map((w,i)=>`<label><input type="checkbox" class="closedwd" value="${i}" ${ss.closedWeekdays.includes(i)?'checked':''}> ${w}</label>`).join('')}
+    </div>
+    <h3 style="font-size:13px; margin-top:22px;">1日の最大労働時間</h3>
+    <div class="field" style="max-width:200px;">
+      <label>1シフトあたり上限（時間）</label>
+      <input type="number" min="1" max="16" step="0.5" id="maxShiftHoursInput" value="${ss.maxShiftHours ?? 11}">
+    </div>
+    <p class="hint">自動シフト作成では、基本的にこの時間を超えないようにシフトを組みます。ただし、どうしても人手が足りない場合に限り、この上限を超えて調整することがあります（その日は画面に警告が表示されます）。</p>
+    <h3 style="font-size:13px; margin-top:22px;">時間帯ごとの必要人数（最低／理想）</h3>
+    <p class="desc">「最低人数」は絶対に割り込みたくない下限、「理想人数」はサービス品質のために本来入れたい人数です。自動シフト作成では、できる限り理想人数に近づけつつ、最低人数は必ず確保します。</p>
+    <div class="grid-wrap">
+      <table class="grid-table" style="min-width:700px;">
+        <thead>
+          <tr>
+            <th class="staff-col">時間帯</th>
+            ${HOURS.map(h=>`<th>${h}:00〜</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="staff-col">最低人数</td>
+            ${HOURS.map(h=>`<td><input type="number" min="0" max="8" class="hrmin" data-hour="${h}" value="${ss.hourlyMinRequirement?.[h] ?? 1}" style="width:52px; text-align:center;"></td>`).join('')}
+          </tr>
+          <tr>
+            <td class="staff-col">理想人数</td>
+            ${HOURS.map(h=>`<td><input type="number" min="0" max="8" class="hrreq" data-hour="${h}" value="${ss.hourlyRequirement[h] ?? 1}" style="width:52px; text-align:center;"></td>`).join('')}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <button class="btn btn-primary" id="saveStoreBtn" style="margin-top:20px;">保存</button>
+  </div>`;
+}
+function bindStoreSettings(){
+  document.getElementById('saveStoreBtn').addEventListener('click', async ()=>{
+    const closedWeekdays = Array.from(document.querySelectorAll('.closedwd:checked')).map(el=>Number(el.value));
+    const hourlyRequirement = {};
+    const hourlyMinRequirement = {};
+    document.querySelectorAll('.hrreq').forEach(el=>{ hourlyRequirement[el.dataset.hour] = Number(el.value)||0; });
+    document.querySelectorAll('.hrmin').forEach(el=>{ hourlyMinRequirement[el.dataset.hour] = Number(el.value)||0; });
+    // 理想が最低を下回らないよう補正
+    Object.keys(hourlyRequirement).forEach(h=>{
+      if(hourlyRequirement[h] < hourlyMinRequirement[h]) hourlyRequirement[h] = hourlyMinRequirement[h];
+    });
+    const maxShiftHours = Math.max(1, Number(document.getElementById('maxShiftHoursInput').value) || 11);
+    state.storeSettings = { ...state.storeSettings, closedWeekdays, hourlyRequirement, hourlyMinRequirement, maxShiftHours };
+    await storeSet('store_settings', state.storeSettings);
+    showToast('店舗設定を保存しました');
+  });
+}
+
+/* ============================= 3. 月次設定（締切日・作成日） ============================= */
+async function renderMonthSettings(){
+  const settings = await storeGet('recurring_month_settings') || { deadlineDay:25, creationDay:28 };
+  const mk = monthKey(state.cursorYear, state.cursorMonth);
+  const requiredDaysOff = await getFulltimeRequiredDaysOff(mk);
+  return `
+  <div class="panel">
+    <h2>月次設定</h2>
+    <p class="desc">「希望休の入力締切日」と「シフト作成予定日」を、毎月何日にするか（周期）で設定します。一度設定すれば毎月自動的に適用されます。月の日数が足りない場合（2月31日など）は、その月の末日が締切になります。</p>
+    <div class="row">
+      <div class="field"><label>希望休 入力締切日 — 毎月</label>
+        <input type="number" min="1" max="31" id="deadlineDayInput" value="${settings.deadlineDay}"> 日
+      </div>
+      <div class="field"><label>シフト作成予定日 — 毎月</label>
+        <input type="number" min="1" max="31" id="creationDayInput" value="${settings.creationDay}"> 日
+      </div>
+    </div>
+    <p class="hint">例：「毎月25日」に設定すると、8月分の希望休は7月25日が締切になります。</p>
+    <button class="btn btn-primary" id="saveMonthBtn">保存</button>
+  </div>
+  <div class="panel">
+    <div class="cal-header">
+      <h2 style="margin:0;">正社員の必要休日数（${state.cursorYear}年${state.cursorMonth+1}月分）</h2>
+      <div class="cal-nav">
+        <button class="btn btn-ghost btn-sm" id="prevMonthBtn">← 前月</button>
+        <button class="btn btn-ghost btn-sm" id="nextMonthBtn">次月 →</button>
+      </div>
+    </div>
+    <p class="desc">月によって日数が変わるため、月ごとに設定します（全正社員共通の値です。個人ごとには設定しません）。自動シフト作成では、正社員がこの日数以上、月内に休みを確保できるようにします。</p>
+    <div class="field" style="max-width:220px;">
+      <label>この月の必要休日数（日）</label>
+      <input type="number" min="0" max="20" step="1" id="requiredDaysOffInput" value="${requiredDaysOff}">
+    </div>
+    <button class="btn btn-primary" id="saveRequiredDaysOffBtn" style="margin-top:12px;">この月の設定を保存</button>
+  </div>`;
+}
+function bindMonthSettings(){
+  document.getElementById('saveMonthBtn').addEventListener('click', async ()=>{
+    const deadlineDay = Math.min(31, Math.max(1, Number(document.getElementById('deadlineDayInput').value)||25));
+    const creationDay = Math.min(31, Math.max(1, Number(document.getElementById('creationDayInput').value)||28));
+    await storeSet('recurring_month_settings', { deadlineDay, creationDay });
+    showToast('月次設定を保存しました');
+  });
+  document.getElementById('prevMonthBtn').addEventListener('click', ()=> shiftMonth(-1));
+  document.getElementById('nextMonthBtn').addEventListener('click', ()=> shiftMonth(1));
+  document.getElementById('saveRequiredDaysOffBtn').addEventListener('click', async ()=>{
+    const mk = monthKey(state.cursorYear, state.cursorMonth);
+    const val = Math.max(0, Number(document.getElementById('requiredDaysOffInput').value) || 0);
+    await storeSet('fulltime_required_days_off:'+mk, val);
+    showToast('この月の必要休日数を保存しました');
+  });
+}
+// 「毎月○日」の設定と対象月から、実際の締切日(Dateオブジェクト)を計算する
+// (例：締切日=31で2月なら、2月の末日になる)
+function resolveRecurringDate(year, month, day){
+  const lastDay = new Date(year, month+1, 0).getDate();
+  const d = Math.min(day, lastDay);
+  return new Date(year, month, d, 23, 59, 59);
+}
+// 正社員の必要休日数は月ごとに変わりうるため、月ごとに保存する（全正社員共通の値）
+async function getFulltimeRequiredDaysOff(mk){
+  const v = await storeGet('fulltime_required_days_off:'+mk);
+  return v == null ? 8 : Number(v);
+}
+function shiftMonth(delta){
+  let m = state.cursorMonth + delta;
+  let y = state.cursorYear;
+  if(m<0){ m=11; y--; } if(m>11){ m=0; y++; }
+  state.cursorMonth = m; state.cursorYear = y;
+  renderMain();
+}
+
+/* ============================= 4. 希望休入力（スタッフ） ============================= */
+async function renderRequestInput(targetStaffId){
+  const staffId = targetStaffId || state.currentUser.id;
+  const targetStaff = state.staffList.find(s=>s.id===staffId);
+  const mk = monthKey(state.cursorYear, state.cursorMonth);
+  const recurring = await storeGet('recurring_month_settings') || { deadlineDay:25, creationDay:28 };
+  // 対象月(state.cursorMonth)の希望休は、前月の deadlineDay が締切
+  let dlYear = state.cursorYear, dlMonth = state.cursorMonth - 1;
+  if(dlMonth < 0){ dlMonth = 11; dlYear--; }
+  const deadlineDate = resolveRecurringDate(dlYear, dlMonth, recurring.deadlineDay);
+  const deadlineLabel = `${deadlineDate.getFullYear()}-${pad(deadlineDate.getMonth()+1)}-${pad(deadlineDate.getDate())}`;
+  const allReq = await storeGet('requests:'+mk) || {};
+  const myReq = allReq[staffId] || [];
+  const isAdminProxy = !!targetStaffId;
+  const isLocked = !isAdminProxy && new Date() > deadlineDate; // 管理者代理入力は締切後も可能
+
+  const daysInMonth = new Date(state.cursorYear, state.cursorMonth+1, 0).getDate();
+  let rows = '';
+  for(let d=1; d<=daysInMonth; d++){
+    const ds = dateStr(state.cursorYear, state.cursorMonth, d);
+    const dow = new Date(state.cursorYear, state.cursorMonth, d).getDay();
+    const closed = state.storeSettings.closedWeekdays.includes(dow);
+    const req = myReq.find(r=>r.date===ds);
+    let cls = 'day-list-row';
+    if(dow===0) cls+=' sun'; if(dow===6) cls+=' sat';
+    if(closed) cls+=' closed';
+    if(req) cls+=' offday';
+    let content = '';
+    if(closed){
+      content = `<span class="off-label" style="color:var(--muted);">店休</span>`;
+    } else if(req){
+      content = `<span class="clear-x" data-clear="${ds}" style="position:static;">✕</span>`;
+      if(req.allDay){
+        content += `<span class="off-label">終日休み</span><a href="#" data-totime="${ds}" style="color:var(--red); font-size:11.5px;">時間指定に変更</a>`;
+      } else {
+        content += `<span class="off-label">時間休み</span>
+          <span class="time-range-edit" style="margin-top:0;">
+            <input type="time" class="req-start" data-date="${ds}" value="${req.start}">
+            <input type="time" class="req-end" data-date="${ds}" value="${req.end}">
+          </span>`;
+      }
+    } else {
+      content = `<span class="hint" style="margin:0; color:var(--muted);">タップで休み希望を追加</span>`;
+    }
+    rows += `<div class="${cls}" data-date="${ds}" data-closed="${closed}" data-hasreq="${!!req}">
+      <div class="day-list-date">${state.cursorMonth+1}/${d} <span class="dow">(${WEEKDAYS[dow]})</span></div>
+      <div class="day-list-content">${content}</div>
+    </div>`;
+  }
+
+  const staffPicker = isAdminProxy ? `
+    <div class="field" style="max-width:260px; margin-bottom:14px;">
+      <label>対象スタッフ</label>
+      <select id="proxyStaffSel">
+        ${state.staffList.map(s=>`<option value="${s.id}" ${s.id===staffId?'selected':''}>${escapeHtml(s.name)}</option>`).join('')}
+      </select>
+    </div>` : '';
+
+  return `
+  <div class="panel">
+    ${staffPicker}
+    <div class="cal-header">
+      <div class="month-label">${state.cursorYear}年 ${state.cursorMonth+1}月 の希望休${isAdminProxy?`（${escapeHtml(targetStaff?.name||'')}さん）`:''}</div>
+      <div class="cal-nav">
+        <button class="btn btn-ghost btn-sm" id="prevMonthBtn">← 前月</button>
+        <button class="btn btn-ghost btn-sm" id="nextMonthBtn">次月 →</button>
+      </div>
+    </div>
+    <p class="desc">入力締切：${deadlineLabel} ${isLocked ? '<strong style="color:var(--red);">（締切済みです）</strong>' : ''}${isAdminProxy ? '　<span style="color:var(--muted);">※管理者はいつでも代理入力できます</span>' : ''}</p>
+    <p class="hint">💡 休みたい日の行を<strong>1回タップ</strong>すると「終日休み」になります。時間だけ休みたい場合は「時間指定に変更」から範囲を指定できます。もう一度タップ、または✕で解除します。</p>
+    <div class="day-list" style="margin-top:10px;">
+      ${rows}
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--red-bg);border:1px solid var(--red);"></i> 希望休</span>
+      <span><i style="background:#F1F1EE;"></i> 店舗定休日</span>
+    </div>
+    ${isLocked ? '<p class="desc" style="color:var(--red); margin-top:14px;">締切日を過ぎているため入力は反映されません。変更したい場合は管理者にご連絡ください。</p>' : ''}
+  </div>`;
+}
+function bindRequestInput(targetStaffId){
+  const staffId = targetStaffId || state.currentUser.id;
+  document.getElementById('prevMonthBtn').addEventListener('click', ()=> shiftMonth(-1));
+  document.getElementById('nextMonthBtn').addEventListener('click', ()=> shiftMonth(1));
+  const picker = document.getElementById('proxyStaffSel');
+  if(picker){
+    picker.addEventListener('change', ()=>{
+      state.requestProxyStaffId = picker.value;
+      renderMain();
+    });
+  }
+
+  document.querySelectorAll('.day-list-row[data-closed="false"]').forEach(cell=>{
+    cell.addEventListener('click', async (e)=>{
+      if(e.target.closest('.clear-x') || e.target.closest('a') || e.target.tagName==='INPUT') return;
+      const ds = cell.dataset.date;
+      const hasReq = cell.dataset.hasreq === 'true';
+      if(!hasReq){
+        await toggleRequest(ds, {date:ds, allDay:true}, staffId);
+      }
+    });
+  });
+  document.querySelectorAll('[data-clear]').forEach(el=>{
+    el.addEventListener('click', async (e)=>{ e.stopPropagation(); await toggleRequest(el.dataset.clear, null, staffId); });
+  });
+  document.querySelectorAll('[data-totime]').forEach(el=>{
+    el.addEventListener('click', async (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      await toggleRequest(el.dataset.totime, {date: el.dataset.totime, allDay:false, start:'09:00', end:'20:00'}, staffId);
+    });
+  });
+  document.querySelectorAll('.req-start, .req-end').forEach(inp=>{
+    inp.addEventListener('change', async ()=>{
+      const ds = inp.dataset.date;
+      const start = document.querySelector(`.req-start[data-date="${ds}"]`).value;
+      const end = document.querySelector(`.req-end[data-date="${ds}"]`).value;
+      await toggleRequest(ds, {date:ds, allDay:false, start, end}, staffId, true);
+    });
+  });
+}
+async function toggleRequest(dateStr, reqOrNull, staffId, skipRerender){
+  const targetId = staffId || state.currentUser.id;
+  const mk = monthKey(state.cursorYear, state.cursorMonth);
+  const allReq = await storeGet('requests:'+mk) || {};
+  const mine = allReq[targetId] || [];
+  const filtered = mine.filter(r=>r.date!==dateStr);
+  if(reqOrNull) filtered.push(reqOrNull);
+  allReq[targetId] = filtered;
+  await storeSet('requests:'+mk, allReq);
+  if(!skipRerender) renderMain();
+}
+
+/* ============================= 5. マイシフト（スタッフ閲覧） ============================= */
+async function renderMySchedule(){
+  const mk = monthKey(state.cursorYear, state.cursorMonth);
+  const schedule = await storeGet('schedule:'+mk) || {};
+  const meta = await storeGet('schedule_meta:'+mk) || {status:'none'};
+  return renderScheduleCalendar(schedule, state.currentUser.id, meta, true);
+}
+function bindMySchedule(){
+  document.getElementById('prevMonthBtn').addEventListener('click', ()=> shiftMonth(-1));
+  document.getElementById('nextMonthBtn').addEventListener('click', ()=> shiftMonth(1));
+}
+
+function renderScheduleCalendar(schedule, staffIdFilter, meta, showMineOnly){
+  const daysInMonth = new Date(state.cursorYear, state.cursorMonth+1, 0).getDate();
+  let rows = '';
+  let totalOT = 0, totalHours = 0;
+  for(let d=1; d<=daysInMonth; d++){
+    const ds = dateStr(state.cursorYear, state.cursorMonth, d);
+    const dow = new Date(state.cursorYear, state.cursorMonth, d).getDay();
+    const closed = state.storeSettings.closedWeekdays.includes(dow);
+    let entries = schedule[ds] || [];
+    if(staffIdFilter) entries = entries.filter(e=>e.staffId===staffIdFilter);
+    let cls='day-list-row'; if(dow===0) cls+=' sun'; if(dow===6) cls+=' sat'; if(closed) cls+=' closed';
+    let content = '';
+    if(closed){
+      content = `<span class="off-label" style="color:var(--muted);">店休</span>`;
+    } else if(entries.length){
+      content = entries.map(e=>{
+        const hrs = (toMin(e.end)-toMin(e.start))/60;
+        const ot = Math.max(0, hrs-9);
+        totalHours += hrs; totalOT += ot;
+        const nm = staffIdFilter ? '' : (state.staffList.find(s=>s.id===e.staffId)?.name.slice(0,4) || '?');
+        return `<span class="time-badge ${ot>0?'ot':''}">${nm?nm+' ':''}${e.start}-${e.end}</span>`;
+      }).join('');
+    } else {
+      content = `<span class="hint" style="margin:0; color:var(--muted);">シフトなし</span>`;
+    }
+    rows += `<div class="${cls}" data-date="${ds}">
+      <div class="day-list-date">${state.cursorMonth+1}/${d} <span class="dow">(${WEEKDAYS[dow]})</span></div>
+      <div class="day-list-content">${content}</div>
+    </div>`;
+  }
+  const wage = staffIdFilter ? Number(state.staffList.find(s=>s.id===staffIdFilter)?.hourlyWage || 0) : 0;
+  const statCards = showMineOnly ? `
+    <div class="stat-cards">
+      <div class="stat-card"><div class="num">${totalHours.toFixed(1)}h</div><div class="lbl">今月の合計勤務時間</div></div>
+      <div class="stat-card ot"><div class="num">${totalOT.toFixed(1)}h</div><div class="lbl">今月の合計残業時間（1日9h超分）</div></div>
+      ${wage>0 ? `<div class="stat-card"><div class="num">¥${Math.round(totalHours*wage).toLocaleString()}</div><div class="lbl">今月の見込み給与（時給ベース）</div></div>` : ''}
+    </div>` : '';
+  return `
+  <div class="panel">
+    <div class="cal-header">
+      <div class="month-label">${state.cursorYear}年 ${state.cursorMonth+1}月 のシフト ${meta.status==='confirmed'?'<span class="tag" style="background:var(--green-bg);color:var(--green);">確定済み</span>':meta.status==='draft'?'<span class="tag" style="background:#FBF0E2;color:var(--amber-dark);">下書き</span>':''}</div>
+      <div class="cal-nav">
+        <button class="btn btn-ghost btn-sm" id="prevMonthBtn">← 前月</button>
+        <button class="btn btn-ghost btn-sm" id="nextMonthBtn">次月 →</button>
+      </div>
+    </div>
+    ${statCards}
+    <div class="day-list">
+      ${rows}
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--navy);"></i> シフト</span>
+      <span><i style="background:var(--red);"></i> 残業あり（9h超）</span>
+    </div>
+  </div>`;
+}
+
+/* ============================= 6. シフト作成・確認（管理者） ============================= */
+const STAFF_COLOR_PALETTE = ['#E8963C','#3B7DD8','#3C8A5B','#C0392B','#8E5FD1','#D6558C','#17A2A0','#B98900','#6B7280','#A8542E'];
+function getStaffColor(idx){ return STAFF_COLOR_PALETTE[idx % STAFF_COLOR_PALETTE.length]; }
+
+function calcDayCost(entries){
+  let total = 0;
+  const countedFulltime = new Set();
+  entries.forEach(e=>{
+    const st = state.staffList.find(x=>x.id===e.staffId);
+    if(!st) return;
+    if(st.employment === 'fulltime'){
+      if(countedFulltime.has(st.id)) return;
+      countedFulltime.add(st.id);
+      total += 25000;
+    } else {
+      const hrs = (toMin(e.end)-toMin(e.start))/60;
+      total += hrs * Number(st.hourlyWage||0);
+    }
+  });
+  return total;
+}
+
+function renderScheduleGrid(schedule, allReq){
+  const y=state.cursorYear, m=state.cursorMonth;
+  const daysInMonth = new Date(y,m+1,0).getDate();
+  const closedWeekdays = state.storeSettings.closedWeekdays;
+  const reqIdeal = state.storeSettings.hourlyRequirement;
+  const reqMin = state.storeSettings.hourlyMinRequirement || {};
+  const days = []; for(let d=1; d<=daysInMonth; d++) days.push(d);
+
+  const dayStats = days.map(d=>{
+    const dow = new Date(y,m,d).getDay();
+    const closed = closedWeekdays.includes(dow);
+    const ds = dateStr(y,m,d);
+    let idealPeak = 0, minPeak = 0, cost = 0;
+    let assignedCount = 0;
+    if(!closed){
+      idealPeak = Math.max(0, ...HOURS.map(h=> reqIdeal[h]??0));
+      minPeak = Math.max(0, ...HOURS.map(h=> reqMin[h]??0));
+      assignedCount = new Set((schedule[ds]||[]).map(e=>e.staffId)).size;
+      cost = calcDayCost(schedule[ds]||[]);
+    }
+    return { d, ds, dow, closed, idealPeak, minPeak, assignedCount, cost, shortage: assignedCount-idealPeak };
+  });
+
+  const totalCost = dayStats.reduce((a,x)=>a+x.cost, 0);
+
+  const headerCells = dayStats.map(ds=>{
+    let color = 'inherit';
+    if(ds.dow===0) color='var(--red)'; else if(ds.dow===6) color='#2F5AA8';
+    return `<th style="color:${color};">${ds.d}<br><span style="font-weight:400;font-size:9.5px;">${WEEKDAYS[ds.dow]}</span></th>`;
+  }).join('');
+
+  const summaryMinRow = dayStats.map(ds=> `<td>${ds.closed?'休':ds.minPeak}</td>`).join('');
+  const summaryIdealRow = dayStats.map(ds=> `<td>${ds.closed?'-':ds.idealPeak}</td>`).join('');
+  const summaryAssignedRow = dayStats.map(ds=>{
+    if(ds.closed) return '<td>-</td>';
+    const cls = ds.assignedCount < ds.minPeak ? 'shortage-neg' : (ds.assignedCount < ds.idealPeak ? 'shortage-mid' : 'shortage-pos');
+    return `<td class="${cls}">${ds.assignedCount}</td>`;
+  }).join('');
+  const summaryShortageRow = dayStats.map(ds=>{
+    if(ds.closed) return '<td>-</td>';
+    const cls = ds.shortage<0?'shortage-neg':(ds.shortage>0?'shortage-pos':'');
+    const label = ds.shortage>0? '+'+ds.shortage : ds.shortage;
+    return `<td class="${cls}">${label}</td>`;
+  }).join('');
+  const summaryCostRow = dayStats.map(ds=> `<td style="font-family:var(--mono); font-size:10px;">${ds.closed?'-':'¥'+Math.round(ds.cost).toLocaleString()}</td>`).join('');
+
+  const staffRows = state.staffList.map((s,idx)=>{
+    const color = getStaffColor(idx);
+    const cells = dayStats.map(ds=>{
+      if(ds.closed) return `<td class="daycell" data-date="${ds.ds}" style="background:#F7F5F0;"></td>`;
+      const entry = (schedule[ds.ds]||[]).find(e=>e.staffId===s.id);
+      const hasReqOff = (allReq[s.id]||[]).some(r=>r.date===ds.ds && r.allDay);
+      if(entry){
+        return `<td class="daycell" data-date="${ds.ds}"><span class="shift-chip" style="background:${color};">${entry.start}-${entry.end}</span></td>`;
+      } else if(hasReqOff){
+        return `<td class="daycell" data-date="${ds.ds}"><span class="offreq-mark">休希望</span></td>`;
+      }
+      return `<td class="daycell" data-date="${ds.ds}"></td>`;
+    }).join('');
+    return `<tr><td class="staff-col"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${color};margin-right:5px;"></span>${escapeHtml(s.name)}${s.hazmat?' 🛢':''}</td>${cells}</tr>`;
+  }).join('');
+
+  return `
+  <div class="panel">
+    <h2>スタッフ別シフト表</h2>
+    <p class="desc">日付をクリックすると、その日の割当を編集できます。配置人数が赤字＝最低人数を割っています／オレンジ＝最低は満たすが理想には未達です。</p>
+    <div class="stat-cards" style="margin-bottom:14px;">
+      <div class="stat-card"><div class="num">¥${Math.round(totalCost).toLocaleString()}</div><div class="lbl">今月の人件費合計（パート：時給×時間／社員：¥25,000／日）</div></div>
+    </div>
+    <div class="grid-wrap">
+      <table class="grid-table">
+        <thead>
+          <tr><th class="staff-col">スタッフ</th>${headerCells}</tr>
+        </thead>
+        <tbody>
+          <tr class="summary-row"><td class="staff-col">最低人数</td>${summaryMinRow}</tr>
+          <tr class="summary-row"><td class="staff-col">理想人数</td>${summaryIdealRow}</tr>
+          <tr class="summary-row"><td class="staff-col">配置人数</td>${summaryAssignedRow}</tr>
+          <tr class="summary-row"><td class="staff-col">過不足(理想比)</td>${summaryShortageRow}</tr>
+          <tr class="summary-row"><td class="staff-col">人件費/日</td>${summaryCostRow}</tr>
+          ${staffRows}
+        </tbody>
+      </table>
+    </div>
+    <div class="legend" style="margin-top:10px;">
+      <span style="color:var(--red);">■ 過不足マイナス＝人手不足</span>
+      <span><i style="background:#F7F5F0;"></i> 店舗定休日</span>
+      <span style="color:var(--red);">休希望＝希望休（未配置）</span>
+    </div>
+  </div>`;
+}
+
+async function renderScheduler(){
+  const mk = monthKey(state.cursorYear, state.cursorMonth);
+  const schedule = await storeGet('schedule:'+mk) || {};
+  const meta = await storeGet('schedule_meta:'+mk) || {status:'none'};
+  const allReq = await storeGet('requests:'+mk) || {};
+  const reqCount = Object.values(allReq).reduce((a,arr)=>a+arr.length,0);
+  const warnings = meta.warnings || [];
+  const wageWarnings = meta.wageWarnings || [];
+  const shiftLenWarnings = meta.shiftLengthWarningDays || [];
+  const understaffedWarnings = meta.understaffedWarningDays || [];
+  const candidates = await storeGet('schedule_candidates:'+mk) || [];
+
+  const candidatesHtml = candidates.length ? `
+    <div class="panel">
+      <h2>どの案を採用しますか？</h2>
+      <p class="desc">3つの案を作成しました。比較して、良いと思うものを選んでください（選んだ後も日付ごとに手直しできます）。</p>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px;">
+        ${candidates.map(c=>`
+          <div class="stat-card" style="background:var(--white); border:1.5px solid var(--line);">
+            <div style="font-weight:800; font-size:14px; margin-bottom:2px;">${c.label}</div>
+            <div class="desc" style="margin-bottom:10px;">${c.desc}</div>
+            <div style="font-size:12.5px; line-height:1.9;">
+              <div>合計残業時間：<strong>${c.stats.totalOvertime}h</strong></div>
+              <div>勤務時間のばらつき：<strong>${c.stats.hoursStdDev}</strong>（小さいほど均等）</div>
+              <div>資格者不足の可能性：<strong style="color:${c.stats.warningCount>0?'var(--red)':'var(--green)'};">${c.stats.warningCount}日</strong></div>
+              <div>最低保証賃金 未達：<strong style="color:${c.stats.wageShortfallCount>0?'var(--red)':'var(--green)'};">${c.stats.wageShortfallCount}名</strong></div>
+              <div>最大労働時間 超過：<strong style="color:${c.stats.shiftLenViolationCount>0?'var(--red)':'var(--green)'};">${c.stats.shiftLenViolationCount}日</strong></div>
+              <div>最低人数 割れ：<strong style="color:${c.stats.understaffedCount>0?'var(--red)':'var(--green)'};">${c.stats.understaffedCount}日</strong></div>
+            </div>
+            <div style="display:flex; gap:6px; margin-top:12px;">
+              <button class="btn btn-ghost btn-sm" data-preview="${c.key}" style="flex:1;">プレビュー</button>
+              <button class="btn btn-amber btn-sm" data-adopt="${c.key}" style="flex:1;">この案を採用</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  ` : '';
+
+  const gridView = renderScheduleGrid(schedule, allReq);
+  return `
+  <div class="panel">
+    <div class="cal-header">
+      <h2 style="margin:0;">シフト作成・確認（${state.cursorYear}年${state.cursorMonth+1}月）</h2>
+      <div class="cal-nav">
+        <button class="btn btn-ghost btn-sm" id="prevMonthBtn">← 前月</button>
+        <button class="btn btn-ghost btn-sm" id="nextMonthBtn">次月 →</button>
+      </div>
+    </div>
+    <p class="desc">今月の希望休 ${reqCount}件を反映して、自動でシフト案を3パターン作成します。最低保証賃金を設定しているスタッフは、稼働可能な範囲で優先的にシフトが追加されます。作成後、表の日付をクリックすると手動調整もできます。</p>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="btn btn-amber" id="genBtn">⚙ 自動でシフト案を3つ作成</button>
+      ${meta.status==='draft' ? '<button class="btn btn-primary" id="confirmBtn">✔ このシフトを確定する</button>' : ''}
+    </div>
+    ${warnings.length ? `<div class="desc" style="color:var(--red); margin-top:12px;">⚠ 危険物取扱者が不足している可能性がある日：${warnings.join('、')}</div>` : ''}
+    ${wageWarnings.length ? `<div class="desc" style="color:var(--red); margin-top:6px;">⚠ 最低保証賃金に届いていない可能性があるスタッフ：${wageWarnings.join('／')}</div>` : ''}
+    ${shiftLenWarnings.length ? `<div class="desc" style="color:var(--red); margin-top:6px;">⚠ 最大労働時間（${state.storeSettings.maxShiftHours ?? 11}時間）を超えて調整した日：${shiftLenWarnings.join('、')}</div>` : ''}
+    ${understaffedWarnings.length ? `<div class="desc" style="color:var(--red); margin-top:6px; font-weight:700;">🚨 最低人数を割り込んでいる日：${understaffedWarnings.join('、')}</div>` : ''}
+  </div>
+  ${candidatesHtml}
+  <div id="candidatePreviewHost"></div>
+  ${gridView}
+  <div id="dayModalHost"></div>
+  `;
+}
+function bindScheduler(){
+  document.getElementById('prevMonthBtn').addEventListener('click', ()=> shiftMonth(-1));
+  document.getElementById('nextMonthBtn').addEventListener('click', ()=> shiftMonth(1));
+  document.getElementById('genBtn').addEventListener('click', async ()=>{
+    document.getElementById('genBtn').textContent = '作成中...';
+    await generateCandidates();
+    renderMain();
+    showToast('3つのシフト案を作成しました。比較して選んでください');
+  });
+  const cb = document.getElementById('confirmBtn');
+  if(cb) cb.addEventListener('click', async ()=>{
+    const mk = monthKey(state.cursorYear, state.cursorMonth);
+    const meta = await storeGet('schedule_meta:'+mk) || {};
+    meta.status = 'confirmed';
+    await storeSet('schedule_meta:'+mk, meta);
+    renderMain();
+    showToast('シフトを確定しました');
+  });
+  document.querySelectorAll('[data-adopt]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      await adoptCandidate(btn.dataset.adopt);
+      renderMain();
+      showToast('この案を採用しました。必要に応じて日付をクリックして調整してください');
+    });
+  });
+  document.querySelectorAll('[data-preview]').forEach(btn=>{
+    btn.addEventListener('click', async ()=> openCandidatePreview(btn.dataset.preview));
+  });
+  document.querySelectorAll('td.daycell[data-date]').forEach(cell=>{
+    cell.addEventListener('click', ()=> openDayEditModal(cell.dataset.date));
+  });
+}
+
+async function openCandidatePreview(candidateKey){
+  const mk = monthKey(state.cursorYear, state.cursorMonth);
+  const candidates = await storeGet('schedule_candidates:'+mk) || [];
+  const allReq = await storeGet('requests:'+mk) || {};
+  const chosen = candidates.find(c=>c.key===candidateKey);
+  if(!chosen) return;
+  const host = document.getElementById('candidatePreviewHost');
+  const grid = renderScheduleGrid(chosen.schedule, allReq);
+  host.innerHTML = `
+  <div class="modal-backdrop">
+    <div class="modal modal-wide">
+      <button class="modal-close" id="closePreviewModal">×</button>
+      <h3>${chosen.label} のプレビュー</h3>
+      <p class="desc">${chosen.desc}</p>
+      ${grid}
+      <div style="display:flex; gap:8px; margin-top:16px;">
+        <button class="btn btn-amber" id="adoptFromPreviewBtn">この案を採用する</button>
+        <button class="btn btn-ghost" id="closePreviewBtn2">閉じる</button>
+      </div>
+    </div>
+  </div>`;
+  const closeIt = ()=> host.innerHTML='';
+  document.getElementById('closePreviewModal').addEventListener('click', closeIt);
+  document.getElementById('closePreviewBtn2').addEventListener('click', closeIt);
+  document.getElementById('adoptFromPreviewBtn').addEventListener('click', async ()=>{
+    await adoptCandidate(candidateKey);
+    closeIt();
+    renderMain();
+    showToast('この案を採用しました。必要に応じて日付をクリックして調整してください');
+  });
+}
+
+const GANTT_START_MIN = OPEN_HOUR*60;
+const GANTT_END_MIN = CLOSE_HOUR*60;
+const GANTT_TOTAL_MIN = GANTT_END_MIN - GANTT_START_MIN;
+const GANTT_MIN_DURATION = 60; // バーの最短の長さ（分）
+function ganttSnap(min, step){ return Math.round(min/step)*step; }
+function ganttPct(min){ return ((min-GANTT_START_MIN)/GANTT_TOTAL_MIN*100); }
+
+async function openDayEditModal(ds){
+  const mk = monthKey(state.cursorYear, state.cursorMonth);
+  const schedule = await storeGet('schedule:'+mk) || {};
+  const allReq = await storeGet('requests:'+mk) || {};
+  const entries = schedule[ds] || [];
+  const host = document.getElementById('dayModalHost');
+
+  const offLabelFor = (staffId)=>{
+    const r = (allReq[staffId]||[]).find(x=>x.date===ds);
+    if(!r) return '';
+    return r.allDay ? '（休み希望：終日）' : `（休み希望：${r.start}-${r.end}）`;
+  };
+  const staffOptions = state.staffList.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}${s.hazmat?' 🛢':''}${escapeHtml(offLabelFor(s.id))}</option>`).join('');
+
+  const hourTicks = [];
+  for(let h=OPEN_HOUR; h<=CLOSE_HOUR; h++) hourTicks.push(h);
+
+  host.innerHTML = `
+  <div class="modal-backdrop">
+    <div class="modal modal-wide">
+      <button class="modal-close" id="closeDayModal">×</button>
+      <h3>${ds} のシフト編集</h3>
+      <p class="hint">バーをドラッグして時間帯を移動、バーの両端をドラッグして時間を伸縮できます。</p>
+      <div class="gantt-wrap">
+        <div class="gantt-ruler">
+          <div class="gantt-ruler-spacer"></div>
+          <div class="gantt-ruler-hours">
+            ${hourTicks.map(h=>`<span style="left:${ganttPct(h*60)}%;">${h}</span>`).join('')}
+          </div>
+        </div>
+        <div id="ganttRows"></div>
+      </div>
+      <h3 style="font-size:13px;margin-top:18px;">スタッフを追加</h3>
+      <div class="row">
+        <div><select id="addStaffSel">${staffOptions}</select></div>
+        <div><input type="time" id="addStart" value="09:00"></div>
+        <div><input type="time" id="addEnd" value="18:00"></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="addAssignBtn" style="margin-top:8px;">＋ 追加</button>
+      <div style="display:flex; gap:8px; margin-top:20px;">
+        <button class="btn btn-primary" id="saveDayBtn">この日を保存</button>
+        <button class="btn btn-ghost" id="cancelDayBtn">閉じる</button>
+      </div>
+    </div>
+  </div>`;
+  let workingEntries = JSON.parse(JSON.stringify(entries));
+
+  function staffLabel(staffId){
+    const s = state.staffList.find(x=>x.id===staffId);
+    if(!s) return '?';
+    return escapeHtml(s.name) + (s.hazmat ? ' 🛢' : '');
+  }
+  function staffColorFor(staffId){
+    const idx = state.staffList.findIndex(x=>x.id===staffId);
+    return getStaffColor(idx<0?0:idx);
+  }
+
+  function refreshRows(){
+    const rowsHost = document.getElementById('ganttRows');
+    rowsHost.innerHTML = workingEntries.map((e,i)=>{
+      const startMin = toMin(e.start), endMin = toMin(e.end);
+      const color = staffColorFor(e.staffId);
+      return `
+      <div class="gantt-row" data-idx="${i}">
+        <div class="gantt-row-label">${staffLabel(e.staffId)}</div>
+        <div class="gantt-track" data-idx="${i}">
+          <div class="gantt-bar" data-idx="${i}" style="left:${ganttPct(startMin)}%; width:${ganttPct(endMin)-ganttPct(startMin)}%; background:${color};">
+            <div class="gantt-handle gantt-handle-left" data-idx="${i}"></div>
+            <span class="gantt-bar-label">${e.start}-${e.end}</span>
+            <div class="gantt-handle gantt-handle-right" data-idx="${i}"></div>
+          </div>
+        </div>
+        <button class="btn btn-danger btn-sm" data-rm="${i}">削除</button>
+      </div>`;
+    }).join('') || '<p class="desc">まだ誰も割り当てられていません</p>';
+
+    document.querySelectorAll('[data-rm]').forEach(b=> b.addEventListener('click', ()=>{
+      workingEntries.splice(Number(b.dataset.rm),1); refreshRows();
+    }));
+    bindGanttDrag();
+  }
+
+  function bindGanttDrag(){
+    document.querySelectorAll('.gantt-bar').forEach(bar=>{
+      const idx = Number(bar.dataset.idx);
+      const track = bar.parentElement;
+      const label = bar.querySelector('.gantt-bar-label');
+
+      const startDrag = (e, mode)=>{
+        e.preventDefault(); e.stopPropagation();
+        const trackRect = track.getBoundingClientRect();
+        const startClientX = e.clientX;
+        const entry = workingEntries[idx];
+        const origStart = toMin(entry.start), origEnd = toMin(entry.end);
+        const duration = origEnd - origStart;
+
+        const onMove = (ev)=>{
+          const deltaPx = ev.clientX - startClientX;
+          const deltaMin = ganttSnap((deltaPx/trackRect.width)*GANTT_TOTAL_MIN, 15);
+          let newStart = origStart, newEnd = origEnd;
+          if(mode==='move'){
+            newStart = Math.max(GANTT_START_MIN, Math.min(origStart+deltaMin, GANTT_END_MIN-duration));
+            newEnd = newStart + duration;
+          } else if(mode==='left'){
+            newStart = Math.max(GANTT_START_MIN, Math.min(origStart+deltaMin, origEnd-GANTT_MIN_DURATION));
+            newEnd = origEnd;
+          } else if(mode==='right'){
+            newEnd = Math.min(GANTT_END_MIN, Math.max(origEnd+deltaMin, origStart+GANTT_MIN_DURATION));
+            newStart = origStart;
+          }
+          entry.start = toTimeStr(newStart);
+          entry.end = toTimeStr(newEnd);
+          bar.style.left = ganttPct(newStart)+'%';
+          bar.style.width = (ganttPct(newEnd)-ganttPct(newStart))+'%';
+          label.textContent = `${entry.start}-${entry.end}`;
+        };
+        const onUp = ()=>{
+          document.removeEventListener('pointermove', onMove);
+          document.removeEventListener('pointerup', onUp);
+        };
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp);
+      };
+
+      bar.querySelector('.gantt-handle-left').addEventListener('pointerdown', (e)=> startDrag(e,'left'));
+      bar.querySelector('.gantt-handle-right').addEventListener('pointerdown', (e)=> startDrag(e,'right'));
+      bar.addEventListener('pointerdown', (e)=>{
+        if(e.target.classList.contains('gantt-handle-left') || e.target.classList.contains('gantt-handle-right')) return;
+        startDrag(e,'move');
+      });
+    });
+  }
+
+  refreshRows();
+
+  document.getElementById('closeDayModal').addEventListener('click', ()=> host.innerHTML='');
+  document.getElementById('cancelDayBtn').addEventListener('click', ()=> host.innerHTML='');
+  document.getElementById('addAssignBtn').addEventListener('click', ()=>{
+    workingEntries.push({
+      staffId: document.getElementById('addStaffSel').value,
+      start: document.getElementById('addStart').value,
+      end: document.getElementById('addEnd').value
+    });
+    refreshRows();
+  });
+  document.getElementById('saveDayBtn').addEventListener('click', async ()=>{
+    const sched = await storeGet('schedule:'+mk) || {};
+    sched[ds] = workingEntries;
+    await storeSet('schedule:'+mk, sched);
+    const meta = await storeGet('schedule_meta:'+mk) || {};
+    if(!meta.status || meta.status==='none') meta.status='draft';
+    await storeSet('schedule_meta:'+mk, meta);
+    host.innerHTML='';
+    renderMain();
+    showToast('保存しました');
+  });
+}
+
+/* ============================= 自動割当アルゴリズム（3案生成） ============================= */
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+const CANDIDATE_VARIANTS = [
+  { key:'A', label:'案A：公平重視', desc:'スタッフの稼働時間をできるだけ均等にならします' },
+  { key:'B', label:'案B：資格者優先', desc:'危険物取扱者をなるべく優先的に配置します' },
+  { key:'C', label:'案C：別パターン', desc:'案Aとは異なる組み合わせを試します（ランダム要素あり）' },
+];
+
+// 対象月の「誰がいつ稼働できるか」を1回だけ計算する（基本パターン＋希望休を反映）
+function computeAvailabilityForMonth(y, m, allReq){
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  const closedWeekdays = state.storeSettings.closedWeekdays;
+  const studentCutoff = state.storeSettings.studentCutoffHour ?? 20;
+  const map = {};
+  for(let d=1; d<=daysInMonth; d++){
+    const ds = dateStr(y,m,d);
+    const dow = new Date(y,m,d).getDay();
+    if(closedWeekdays.includes(dow)){ map[ds] = { closed:true, list:[] }; continue; }
+    const wdKey = WD_KEYS[dow];
+    const list = [];
+    state.staffList.forEach(s=>{
+      const pat = s.basePattern[wdKey];
+      if(!pat || !pat.available) return;
+      let winStart = toMin(pat.start), winEnd = toMin(pat.end);
+      if(s.isStudent) winEnd = Math.min(winEnd, studentCutoff*60);
+      winStart = Math.max(winStart, OPEN_HOUR*60);
+      winEnd = Math.min(winEnd, CLOSE_HOUR*60);
+      const r = (allReq[s.id]||[]).find(x=>x.date===ds);
+      if(r){
+        if(r.allDay) return;
+        const rs = toMin(r.start), re = toMin(r.end);
+        const beforeLen = Math.max(0, rs - winStart);
+        const afterLen = Math.max(0, winEnd - re);
+        if(beforeLen <= 0 && afterLen <= 0) return;
+        if(beforeLen >= afterLen){ if(beforeLen<=0) return; winEnd = rs; }
+        else { if(afterLen<=0) return; winStart = re; }
+      }
+      if(winEnd - winStart < 60) return;
+      list.push({ staffId: s.id, start:winStart, end:winEnd });
+    });
+    map[ds] = { closed:false, list };
+  }
+  return map;
+}
+
+// 1つの案（variant）を生成する
+function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
+  const req = state.storeSettings.hourlyRequirement; // 理想人数
+  const reqMin = state.storeSettings.hourlyMinRequirement || {}; // 最低人数
+  const maxShiftMinGlobal = (Number(state.storeSettings.maxShiftHours) || 11) * 60;
+  const rng = mulberry32(20260709 + (variantKey==='C'?1:0)*7919 + y*31+m);
+  const availability = computeAvailabilityForMonth(y, m, allReq);
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+
+  const runningHours = {}; state.staffList.forEach(s=> runningHours[s.id]=0);
+  const workDaysCount = {}; state.staffList.forEach(s=> workDaysCount[s.id]=0);
+  const monthlyOT = {}; state.staffList.forEach(s=> monthlyOT[s.id]=0);
+  const schedule = {};
+  const warningDays = [];
+  const shiftLengthWarningDays = [];
+  const understaffedWarningDays = []; // 最低人数を割り込んだ日
+
+  Object.keys(availability).sort().forEach(ds=>{
+    const dayInfo = availability[ds];
+    if(dayInfo.closed) return;
+    const [, mm, dd] = ds.split('-').map(Number);
+
+    let available = dayInfo.list.map(item=>({
+      staff: state.staffList.find(x=>x.id===item.staffId), start:item.start, end:item.end
+    })).filter(x=>x.staff).filter(x=>{
+      // 正社員は「必要休日数」（店舗設定・月ごと）の分だけ月内に休みを確保する
+      if(x.staff.employment !== 'fulltime') return true;
+      const maxWorkDays = daysInMonth - (Number(monthlyRequiredDaysOff)||0);
+      return workDaysCount[x.staff.id] < maxWorkDays;
+    });
+
+    const maxShiftMin = maxShiftMinGlobal;
+    const coverage = {}; HOURS.forEach(h=> coverage[h]=0);
+    const assigned = [];
+    const assignedIds = new Set();
+    const cappedEntries = []; // 上限でカットされた枠（あとで「どうしても」の時に伸ばす候補）
+    const otExtendCandidates = []; // 残業なしで入った正社員（「どうしても」の時だけ残業に回す候補）
+
+    function effectiveOTCap(staff){
+      return staff.otProhibited ? 0 : (Number(staff.monthlyOTLimit) || 40);
+    }
+
+    // 割当を1件試みる共通処理。capMin=このシフトで許容する最大の長さ。allowOT=正社員の残業を許すか
+    function attemptAssign(cand, capMin, allowOT){
+      const fullHrs = hoursInRange(cand.start, cand.end);
+      const helps = fullHrs.some(h=> coverage[h] < (req[h]??0));
+      if(!helps) return null;
+      let assignStart = cand.start, assignEnd = cand.end;
+      const fullLen = cand.end - cand.start;
+      if(fullLen > capMin){
+        const targetHour = fullHrs.find(h=> coverage[h] < (req[h]??0));
+        let targetStart = targetHour!=null ? Math.max(cand.start, targetHour*60) : cand.start;
+        assignStart = Math.max(cand.start, Math.min(targetStart, cand.end - capMin));
+        assignEnd = assignStart + capMin;
+      }
+      if(cand.staff.employment === 'fulltime'){
+        const dailyOT = Math.max(0, (assignEnd-assignStart)/60 - 9);
+        if(dailyOT > 0 && !allowOT) return null;
+        if(monthlyOT[cand.staff.id] + dailyOT > effectiveOTCap(cand.staff)) return null;
+      }
+      if(cand.staff.isNewbie){
+        const hasFulltimeOverlap = assigned.some(a=>{
+          const st = state.staffList.find(x=>x.id===a.staffId);
+          return st && st.employment==='fulltime' && toMin(a.start) < assignEnd && assignStart < toMin(a.end);
+        });
+        if(!hasFulltimeOverlap) return null;
+      }
+      const entry = { staffId:cand.staff.id, start:toTimeStr(assignStart), end:toTimeStr(assignEnd) };
+      assigned.push(entry);
+      assignedIds.add(cand.staff.id);
+      hoursInRange(assignStart, assignEnd).forEach(h=> coverage[h]=(coverage[h]||0)+1);
+      runningHours[cand.staff.id] += (assignEnd-assignStart)/60;
+      if(fullLen > maxShiftMin) cappedEntries.push({ entry, staffId:cand.staff.id, trueEnd:cand.end });
+      return { entry, trueEnd: cand.end, fullLen };
+    }
+
+    // フェーズ1：正社員をまず優先配置。ただし残業（1日9時間超）はさせない
+    const fulltimeCands = available.filter(c=> c.staff.employment==='fulltime');
+    if(variantKey === 'B'){
+      fulltimeCands.sort((a,b)=>{
+        const hz = (b.staff.hazmat?1:0) - (a.staff.hazmat?1:0);
+        if(hz !== 0) return hz;
+        return runningHours[a.staff.id]-runningHours[b.staff.id];
+      });
+    } else {
+      fulltimeCands.sort((a,b)=> runningHours[a.staff.id]-runningHours[b.staff.id]);
+    }
+    fulltimeCands.forEach(cand=>{
+      const result = attemptAssign(cand, Math.min(9*60, maxShiftMin), false);
+      if(result && result.fullLen > 9*60){
+        otExtendCandidates.push({ entry: result.entry, staffId: cand.staff.id, trueEnd: result.trueEnd });
+      }
+    });
+
+    // フェーズ2：パート・学生で残りを埋める。案によらず、誰が入るかにランダム性を持たせる
+    // （毎回同じ人ばかりに偏らないようにするため）
+    const parttimeCands = available.filter(c=> c.staff.employment!=='fulltime' && !assignedIds.has(c.staff.id));
+    if(variantKey === 'B'){
+      parttimeCands.sort((a,b)=>{
+        const hz = (b.staff.hazmat?1:0) - (a.staff.hazmat?1:0);
+        if(hz !== 0) return hz;
+        return (runningHours[a.staff.id]-runningHours[b.staff.id]) + (rng()-0.5)*2;
+      });
+    } else {
+      parttimeCands.sort((a,b)=> (runningHours[a.staff.id]-runningHours[b.staff.id]) + (rng()-0.5)*2);
+    }
+    parttimeCands.forEach(cand=> attemptAssign(cand, maxShiftMin, false));
+
+    // フェーズ3：それでもまだ足りない時間帯があれば、最終手段として正社員の残業を許容する。
+    // まずは既に入っている正社員の勤務時間を伸ばし、それでも足りなければ新たに正社員を残業で投入する
+    const stillShort = HOURS.some(h=> (req[h]??0) > 0 && (coverage[h]||0) < (req[h]??0));
+    if(stillShort){
+      HOURS.forEach(h=>{
+        if((req[h]??0) <= 0) return;
+        if((coverage[h]||0) >= (req[h]??0)) return;
+        const ext = otExtendCandidates.find(o=>{
+          const st = state.staffList.find(x=>x.id===o.staffId);
+          return st && toMin(o.entry.end) <= h*60 && o.trueEnd > h*60;
+        });
+        if(ext){
+          const st = state.staffList.find(x=>x.id===ext.staffId);
+          const oldEndMin = toMin(ext.entry.end);
+          const capByMax = toMin(ext.entry.start) + maxShiftMin;
+          const capByOT = toMin(ext.entry.start) + 9*60 + (effectiveOTCap(st) - monthlyOT[ext.staffId])*60;
+          const newEndMin = Math.max(oldEndMin, Math.min(ext.trueEnd, (h+1)*60, capByMax, capByOT));
+          if(newEndMin > oldEndMin){
+            const oldHrs = hoursInRange(toMin(ext.entry.start), oldEndMin);
+            const oldOT = Math.max(0,(oldEndMin-toMin(ext.entry.start))/60-9);
+            ext.entry.end = toTimeStr(newEndMin);
+            hoursInRange(toMin(ext.entry.start), newEndMin).filter(x=>!oldHrs.includes(x)).forEach(x=> coverage[x]=(coverage[x]||0)+1);
+            const newOT = Math.max(0,(newEndMin-toMin(ext.entry.start))/60-9);
+            runningHours[ext.staffId] += (newEndMin-oldEndMin)/60;
+            monthlyOT[ext.staffId] += (newOT-oldOT);
+          }
+        }
+      });
+      const freshFulltimeOT = fulltimeCands.filter(c=> !assignedIds.has(c.staff.id));
+      freshFulltimeOT.forEach(cand=> attemptAssign(cand, maxShiftMin, true));
+    }
+
+    // 上限でカットしたせいで人手不足になった時間帯があれば、「どうしても」のケースとして
+    // 例外的にカットした人の勤務時間を必要な分だけ伸ばす（11時間ルールを破ることを許容）
+    let shiftLenViolated = false;
+    HOURS.forEach(h=>{
+      if((req[h]??0) <= 0) return;
+      if((coverage[h]||0) >= (req[h]??0)) return;
+      const ext = cappedEntries.find(o=> toMin(o.entry.end) <= h*60 && o.trueEnd > h*60);
+      if(ext){
+        const oldEndMin = toMin(ext.entry.end);
+        const newEndMin = Math.min(ext.trueEnd, (h+1)*60);
+        if(newEndMin > oldEndMin){
+          const oldHrs = hoursInRange(toMin(ext.entry.start), oldEndMin);
+          ext.entry.end = toTimeStr(newEndMin);
+          hoursInRange(toMin(ext.entry.start), newEndMin).filter(x=>!oldHrs.includes(x)).forEach(x=> coverage[x]=(coverage[x]||0)+1);
+          runningHours[ext.staffId] += (newEndMin-oldEndMin)/60;
+          shiftLenViolated = true;
+        }
+      }
+    });
+    if(shiftLenViolated) shiftLengthWarningDays.push(`${mm}/${dd}`);
+
+    let hazmatOk = true;
+    HOURS.forEach(h=>{
+      if((req[h]??0) <= 0) return;
+      const covered = assigned.some(a=>{
+        const s = state.staffList.find(x=>x.id===a.staffId);
+        return s && s.hazmat && toMin(a.start)<=h*60 && toMin(a.end)>h*60;
+      });
+      if(!covered){
+        const extra = available.find(c=> c.staff.hazmat && !assignedIds.has(c.staff.id) && c.start<=h*60 && c.end>h*60);
+        if(extra){
+          const extraLen = extra.end-extra.start;
+          const extraEnd = extraLen>maxShiftMin ? extra.start+maxShiftMin : extra.end;
+          assigned.push({ staffId:extra.staff.id, start:toTimeStr(extra.start), end:toTimeStr(extraEnd) });
+          assignedIds.add(extra.staff.id);
+          runningHours[extra.staff.id] += (extraEnd-extra.start)/60;
+        } else {
+          hazmatOk = false;
+        }
+      }
+    });
+    if(!hazmatOk) warningDays.push(`${mm}/${dd}`);
+
+    // 最低人数を割り込んでいる時間帯がないか最終チェック
+    const understaffed = HOURS.some(h=> (reqMin[h]??0) > 0 && (coverage[h]||0) < (reqMin[h]??0));
+    if(understaffed) understaffedWarningDays.push(`${mm}/${dd}`);
+
+    // 正社員の「稼働日数」「月間残業時間」を、この日の最終結果で更新する
+    const workedToday = new Set();
+    assigned.forEach(a=>{
+      const st = state.staffList.find(x=>x.id===a.staffId);
+      if(!st || st.employment !== 'fulltime') return;
+      if(workedToday.has(a.staffId)) return; // 同じ人が同日に複数枠は基本ないが念のため
+      workedToday.add(a.staffId);
+      workDaysCount[a.staffId] = (workDaysCount[a.staffId]||0) + 1;
+      const hrs = (toMin(a.end)-toMin(a.start))/60;
+      monthlyOT[a.staffId] = (monthlyOT[a.staffId]||0) + Math.max(0, hrs-9);
+    });
+
+    schedule[ds] = assigned;
+  });
+
+  // ---- 最低保証賃金／希望月間労働時間 トップアップパス ----
+  // 稼働時間×時給が最低保証賃金に届いていない、または希望する月間総労働時間に届いていない
+  // スタッフには、まだ入っていない稼働可能日を追加でシフトに組み込む（店の必要人数を超えてでも優先）
+  const wageWarnings = [];
+  state.staffList.forEach(s=>{
+    const wage = Number(s.hourlyWage) || 0;
+    const guarantee = Number(s.minGuaranteeWage) || 0;
+    const desiredHours = Number(s.desiredMonthlyHours) || 0;
+    const guaranteeImpliedHours = (guarantee > 0 && wage > 0) ? guarantee/wage : 0;
+    const targetHours = Math.max(desiredHours, guaranteeImpliedHours);
+    if(targetHours <= 0) return;
+    let currentHours = runningHours[s.id]||0;
+    if(currentHours >= targetHours) return;
+
+    const candidateDates = Object.keys(availability).filter(ds=>{
+      const info = availability[ds];
+      if(info.closed) return false;
+      const already = (schedule[ds]||[]).some(e=>e.staffId===s.id);
+      if(already) return false;
+      return info.list.some(item=>item.staffId===s.id);
+    }).sort();
+
+    for(const ds of candidateDates){
+      if(currentHours >= targetHours) break;
+      const item = availability[ds].list.find(x=>x.staffId===s.id);
+      if(!item) continue;
+      if(!schedule[ds]) schedule[ds] = [];
+      const itemLen = item.end - item.start;
+      const cappedEnd = itemLen > maxShiftMinGlobal ? item.start + maxShiftMinGlobal : item.end;
+      schedule[ds].push({ staffId:s.id, start:toTimeStr(item.start), end:toTimeStr(cappedEnd) });
+      const hrs = (cappedEnd-item.start)/60;
+      runningHours[s.id] = (runningHours[s.id]||0) + hrs;
+      currentHours += hrs;
+    }
+    if(currentHours < targetHours){
+      const currentWage = currentHours*wage;
+      if(guarantee>0 && wage>0 && currentWage < guarantee){
+        wageWarnings.push(`${s.name}（あと約${Math.round(guarantee-currentWage).toLocaleString()}円分の勤務が必要ですが、稼働可能な日が足りません）`);
+      } else if(desiredHours>0){
+        wageWarnings.push(`${s.name}（希望の月間労働時間まであと約${Math.round((targetHours-currentHours)*10)/10}時間分、稼働可能な日が足りません）`);
+      }
+    }
+  });
+
+  return { schedule, warningDays, shiftLengthWarningDays, understaffedWarningDays, runningHours, wageWarnings };
+}
+
+function computeCandidateStats(result){
+  let totalOvertime = 0;
+  Object.values(result.schedule).forEach(entries=>{
+    entries.forEach(e=>{
+      const hrs = (toMin(e.end)-toMin(e.start))/60;
+      totalOvertime += Math.max(0, hrs-9);
+    });
+  });
+  const vals = Object.values(result.runningHours);
+  const mean = vals.reduce((a,b)=>a+b,0) / (vals.length||1);
+  const variance = vals.reduce((a,b)=>a+Math.pow(b-mean,2),0) / (vals.length||1);
+  return {
+    totalOvertime: Math.round(totalOvertime*10)/10,
+    hoursStdDev: Math.round(Math.sqrt(variance)*10)/10,
+    warningCount: result.warningDays.length,
+    wageShortfallCount: result.wageWarnings.length,
+    shiftLenViolationCount: result.shiftLengthWarningDays.length,
+    understaffedCount: result.understaffedWarningDays.length,
+  };
+}
+
+// 3案まとめて生成し、一時保存する
+async function generateCandidates(){
+  const y = state.cursorYear, m = state.cursorMonth;
+  const mk = monthKey(y,m);
+  const allReq = await storeGet('requests:'+mk) || {};
+  const monthlyRequiredDaysOff = await getFulltimeRequiredDaysOff(mk);
+  const candidates = CANDIDATE_VARIANTS.map(v=>{
+    const result = generateOneSchedule(v.key, y, m, allReq, monthlyRequiredDaysOff);
+    const stats = computeCandidateStats(result);
+    return { key:v.key, label:v.label, desc:v.desc, schedule:result.schedule, warningDays:result.warningDays, wageWarnings:result.wageWarnings, shiftLengthWarningDays:result.shiftLengthWarningDays, understaffedWarningDays:result.understaffedWarningDays, stats };
+  });
+  await storeSet('schedule_candidates:'+mk, candidates);
+  return candidates;
+}
+
+// 選ばれた案を、実際のシフト（下書き）として確定させる
+async function adoptCandidate(candidateKey){
+  const mk = monthKey(state.cursorYear, state.cursorMonth);
+  const candidates = await storeGet('schedule_candidates:'+mk) || [];
+  const chosen = candidates.find(c=>c.key===candidateKey);
+  if(!chosen) return;
+  await storeSet('schedule:'+mk, chosen.schedule);
+  await storeSet('schedule_meta:'+mk, { status:'draft', generatedAt: new Date().toISOString(), warnings: chosen.warningDays, wageWarnings: chosen.wageWarnings || [], shiftLengthWarningDays: chosen.shiftLengthWarningDays || [], understaffedWarningDays: chosen.understaffedWarningDays || [], adoptedVariant: chosen.key });
+  await storeSet('schedule_candidates:'+mk, []); // 採用後は候補をクリア
+}
+
+/* ============================= START ============================= */
+init();
+</script>
+</body>
+</html>

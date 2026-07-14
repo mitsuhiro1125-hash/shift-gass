@@ -1,0 +1,17 @@
+// 本番（Vercel + Prisma Postgres）専用のスキーマです。
+// VercelのStorageタブでPrisma Postgresを接続すると、DATABASE_URLが自動的に設定されます。
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model KV {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
