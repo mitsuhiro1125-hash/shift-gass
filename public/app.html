@@ -1560,12 +1560,14 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
     // 割当を1件試みる共通処理。capMin=このシフトで許容する最大の長さ。allowOT=正社員の残業を許すか
     function attemptAssign(cand, capMin, allowOT){
       const fullHrs = hoursInRange(cand.start, cand.end);
-      const helps = fullHrs.some(h=> coverage[h] < (req[h]??0));
-      if(!helps) return null;
+      const helpsIdeal = fullHrs.some(h=> coverage[h] < (req[h]??0));
+      // 原則：時間帯ごとの人数は「理想人数」を超えて配置しない。
+      // 例外：新人は、社員が同時に勤務していれば理想人数を超えても配置してよい（教育目的のため）
+      if(!helpsIdeal && !cand.staff.isNewbie) return null;
       let assignStart = cand.start, assignEnd = cand.end;
       const fullLen = cand.end - cand.start;
       if(fullLen > capMin){
-        const targetHour = fullHrs.find(h=> coverage[h] < (req[h]??0));
+        const targetHour = helpsIdeal ? fullHrs.find(h=> coverage[h] < (req[h]??0)) : null;
         let targetStart = targetHour!=null ? Math.max(cand.start, targetHour*60) : cand.start;
         assignStart = Math.max(cand.start, Math.min(targetStart, cand.end - capMin));
         assignEnd = assignStart + capMin;
@@ -1677,6 +1679,8 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
     });
     if(shiftLenViolated) shiftLengthWarningDays.push(`${mm}/${dd}`);
 
+    // 危険物取扱者の確認：不足していても人数を追加はしない（理想人数を超えないことを優先）。
+    // 資格者を確保できない時間帯があれば警告として表示するに留める
     let hazmatOk = true;
     HOURS.forEach(h=>{
       if((req[h]??0) <= 0) return;
@@ -1684,18 +1688,7 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
         const s = state.staffList.find(x=>x.id===a.staffId);
         return s && s.hazmat && toMin(a.start)<=h*60 && toMin(a.end)>h*60;
       });
-      if(!covered){
-        const extra = available.find(c=> c.staff.hazmat && !assignedIds.has(c.staff.id) && c.start<=h*60 && c.end>h*60);
-        if(extra){
-          const extraLen = extra.end-extra.start;
-          const extraEnd = extraLen>maxShiftMin ? extra.start+maxShiftMin : extra.end;
-          assigned.push({ staffId:extra.staff.id, start:toTimeStr(extra.start), end:toTimeStr(extraEnd) });
-          assignedIds.add(extra.staff.id);
-          runningHours[extra.staff.id] += (extraEnd-extra.start)/60;
-        } else {
-          hazmatOk = false;
-        }
-      }
+      if(!covered) hazmatOk = false;
     });
     if(!hazmatOk) warningDays.push(`${mm}/${dd}`);
 
@@ -1720,7 +1713,16 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
 
   // ---- 最低保証賃金／希望月間労働時間 トップアップパス ----
   // 稼働時間×時給が最低保証賃金に届いていない、または希望する月間総労働時間に届いていない
-  // スタッフには、まだ入っていない稼働可能日を追加でシフトに組み込む（店の必要人数を超えてでも優先）
+  // スタッフには、まだ入っていない稼働可能日を追加でシフトに組み込む。
+  // ただし「理想人数を超えない」ことを優先するため、その日その時間帯が既に理想人数に
+  // 達している場合は追加しない（コストを抑えるため。届かない分は警告で伝える）
+  function hourlyCoverageOf(ds){
+    const cov = {}; HOURS.forEach(h=> cov[h]=0);
+    (schedule[ds]||[]).forEach(e=>{
+      hoursInRange(toMin(e.start), toMin(e.end)).forEach(h=> cov[h]=(cov[h]||0)+1);
+    });
+    return cov;
+  }
   const wageWarnings = [];
   state.staffList.forEach(s=>{
     const wage = Number(s.hourlyWage) || 0;
@@ -1744,9 +1746,12 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
       if(currentHours >= targetHours) break;
       const item = availability[ds].list.find(x=>x.staffId===s.id);
       if(!item) continue;
-      if(!schedule[ds]) schedule[ds] = [];
       const itemLen = item.end - item.start;
       const cappedEnd = itemLen > maxShiftMinGlobal ? item.start + maxShiftMinGlobal : item.end;
+      const cov = hourlyCoverageOf(ds);
+      const wouldExceedIdeal = hoursInRange(item.start, cappedEnd).some(h=> (cov[h]||0) >= (req[h]??0));
+      if(wouldExceedIdeal) continue; // この日は理想人数を超えてしまうためスキップ
+      if(!schedule[ds]) schedule[ds] = [];
       schedule[ds].push({ staffId:s.id, start:toTimeStr(item.start), end:toTimeStr(cappedEnd) });
       const hrs = (cappedEnd-item.start)/60;
       runningHours[s.id] = (runningHours[s.id]||0) + hrs;
@@ -1755,9 +1760,9 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
     if(currentHours < targetHours){
       const currentWage = currentHours*wage;
       if(guarantee>0 && wage>0 && currentWage < guarantee){
-        wageWarnings.push(`${s.name}（あと約${Math.round(guarantee-currentWage).toLocaleString()}円分の勤務が必要ですが、稼働可能な日が足りません）`);
+        wageWarnings.push(`${s.name}（あと約${Math.round(guarantee-currentWage).toLocaleString()}円分の勤務が必要ですが、理想人数を超えずには増やせません）`);
       } else if(desiredHours>0){
-        wageWarnings.push(`${s.name}（希望の月間労働時間まであと約${Math.round((targetHours-currentHours)*10)/10}時間分、稼働可能な日が足りません）`);
+        wageWarnings.push(`${s.name}（希望の月間労働時間まであと約${Math.round((targetHours-currentHours)*10)/10}時間分、理想人数を超えずには増やせません）`);
       }
     }
   });
