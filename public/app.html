@@ -155,6 +155,8 @@
     border-radius:4px; display:flex; justify-content:space-between; gap:4px;
   }
   .time-badge.ot{background:var(--red);}
+  .time-badge.mine{outline:2.5px solid var(--amber); outline-offset:1px; font-weight:800;}
+  .time-badge.ot-outline{box-shadow:inset 0 0 0 2px var(--red);}
   .cal-cell .warn-dot{position:absolute; top:5px; right:5px; width:7px; height:7px; border-radius:50%; background:var(--red);}
   .cal-cell .clear-x{position:absolute; top:3px; right:5px; font-size:11px; color:var(--muted); cursor:pointer;}
   .clear-x{font-size:13px; color:var(--muted); cursor:pointer; padding:0 2px;}
@@ -989,26 +991,35 @@ function renderScheduleCalendar(schedule, staffIdFilter, meta, showMineOnly){
   const daysInMonth = new Date(state.cursorYear, state.cursorMonth+1, 0).getDate();
   let rows = '';
   let totalOT = 0, totalHours = 0;
+  const rosterStaff = state.staffList.filter(s=> !s.isAdmin);
   for(let d=1; d<=daysInMonth; d++){
     const ds = dateStr(state.cursorYear, state.cursorMonth, d);
     const dow = new Date(state.cursorYear, state.cursorMonth, d).getDay();
     const closed = state.storeSettings.closedWeekdays.includes(dow);
-    let entries = schedule[ds] || [];
-    if(staffIdFilter) entries = entries.filter(e=>e.staffId===staffIdFilter);
+    const allEntries = schedule[ds] || [];
     let cls='day-list-row'; if(dow===0) cls+=' sun'; if(dow===6) cls+=' sat'; if(closed) cls+=' closed';
     let content = '';
     if(closed){
       content = `<span class="off-label" style="color:var(--muted);">店休</span>`;
-    } else if(entries.length){
-      content = entries.map(e=>{
-        const hrs = (toMin(e.end)-toMin(e.start))/60;
-        const ot = Math.max(0, hrs-9);
-        totalHours += hrs; totalOT += ot;
-        const nm = staffIdFilter ? '' : (state.staffList.find(s=>s.id===e.staffId)?.name.slice(0,4) || '?');
-        return `<span class="time-badge ${ot>0?'ot':''}">${nm?nm+' ':''}${e.start}-${e.end}</span>`;
-      }).join('');
     } else {
-      content = `<span class="hint" style="margin:0; color:var(--muted);">シフトなし</span>`;
+      // 自分の勤務時間の集計（統計カード用）
+      if(staffIdFilter){
+        allEntries.filter(e=>e.staffId===staffIdFilter).forEach(e=>{
+          const hrs = (toMin(e.end)-toMin(e.start))/60;
+          totalHours += hrs; totalOT += Math.max(0, hrs-9);
+        });
+      }
+      // 表示は自分以外も含めた全スタッフ分（管理者は除く）
+      const badges = rosterStaff.map((s, idx)=>{
+        const e = allEntries.find(x=>x.staffId===s.id);
+        if(!e) return '';
+        const color = getStaffColor(state.staffList.indexOf(s));
+        const isMine = s.id===staffIdFilter;
+        const hrs = (toMin(e.end)-toMin(e.start))/60;
+        const isOT = hrs > 9;
+        return `<span class="time-badge${isMine?' mine':''}${isOT?' ot-outline':''}" style="background:${color}; color:#fff;">${escapeHtml(s.name)} ${e.start}-${e.end}</span>`;
+      }).join('');
+      content = badges || `<span class="hint" style="margin:0; color:var(--muted);">シフトなし</span>`;
     }
     rows += `<div class="${cls}" data-date="${ds}">
       <div class="day-list-date">${state.cursorMonth+1}/${d} <span class="dow">(${WEEKDAYS[dow]})</span></div>
@@ -1032,12 +1043,12 @@ function renderScheduleCalendar(schedule, staffIdFilter, meta, showMineOnly){
       </div>
     </div>
     ${statCards}
+    ${showMineOnly ? `<div class="legend" style="margin-bottom:8px;">
+      <span><span class="time-badge mine" style="background:var(--navy); color:#fff; padding:2px 8px;">例</span> 自分のシフト（枠で強調表示）</span>
+      <span><span class="time-badge ot-outline" style="background:var(--navy); color:#fff; padding:2px 8px;">例</span> 残業あり（9h超）</span>
+    </div>` : ''}
     <div class="day-list">
       ${rows}
-    </div>
-    <div class="legend">
-      <span><i style="background:var(--navy);"></i> シフト</span>
-      <span><i style="background:var(--red);"></i> 残業あり（9h超）</span>
     </div>
   </div>`;
 }
