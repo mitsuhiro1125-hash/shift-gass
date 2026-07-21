@@ -764,8 +764,9 @@ function bindStoreSettings(){
 /* ============================= 3. 月次設定（締切日・作成日） ============================= */
 async function renderMonthSettings(){
   const settings = await storeGet('recurring_month_settings') || { deadlineDay:25, creationDay:28 };
-  const mk = monthKey(state.cursorYear, state.cursorMonth);
-  const requiredDaysOff = await getFulltimeRequiredDaysOff(mk);
+  const year = state.cursorYear;
+  const monthLabels = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  const monthValues = await Promise.all(monthLabels.map((_,i)=> getFulltimeRequiredDaysOff(monthKey(year,i))));
   return `
   <div class="panel">
     <h2>月次設定</h2>
@@ -783,18 +784,22 @@ async function renderMonthSettings(){
   </div>
   <div class="panel">
     <div class="cal-header">
-      <h2 style="margin:0;">正社員の必要休日数（${state.cursorYear}年${state.cursorMonth+1}月分）</h2>
+      <h2 style="margin:0;">正社員の必要休日数（${year}年）</h2>
       <div class="cal-nav">
-        <button class="btn btn-ghost btn-sm" id="prevMonthBtn">← 前月</button>
-        <button class="btn btn-ghost btn-sm" id="nextMonthBtn">次月 →</button>
+        <button class="btn btn-ghost btn-sm" id="prevYearBtn">← 前年</button>
+        <button class="btn btn-ghost btn-sm" id="nextYearBtn">翌年 →</button>
       </div>
     </div>
     <p class="desc">月によって日数が変わるため、月ごとに設定します（全正社員共通の値です。個人ごとには設定しません）。自動シフト作成では、正社員がこの日数以上、月内に休みを確保できるようにします。</p>
-    <div class="field" style="max-width:220px;">
-      <label>この月の必要休日数（日）</label>
-      <input type="number" min="0" max="20" step="1" id="requiredDaysOffInput" value="${requiredDaysOff}">
+    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:10px;">
+      ${monthLabels.map((label,i)=>`
+        <div>
+          <label style="font-size:11.5px; color:var(--muted); display:block; margin-bottom:3px;">${label}</label>
+          <input type="number" min="0" max="20" step="1" class="reqoff-input" data-month="${i}" value="${monthValues[i]}">
+        </div>
+      `).join('')}
     </div>
-    <button class="btn btn-primary" id="saveRequiredDaysOffBtn" style="margin-top:12px;">この月の設定を保存</button>
+    <button class="btn btn-primary" id="saveRequiredDaysOffBtn" style="margin-top:16px;">${year}年分をまとめて保存</button>
   </div>`;
 }
 function bindMonthSettings(){
@@ -804,13 +809,16 @@ function bindMonthSettings(){
     await storeSet('recurring_month_settings', { deadlineDay, creationDay });
     showToast('月次設定を保存しました');
   });
-  document.getElementById('prevMonthBtn').addEventListener('click', ()=> shiftMonth(-1));
-  document.getElementById('nextMonthBtn').addEventListener('click', ()=> shiftMonth(1));
+  document.getElementById('prevYearBtn').addEventListener('click', ()=>{ state.cursorYear--; renderMain(); });
+  document.getElementById('nextYearBtn').addEventListener('click', ()=>{ state.cursorYear++; renderMain(); });
   document.getElementById('saveRequiredDaysOffBtn').addEventListener('click', async ()=>{
-    const mk = monthKey(state.cursorYear, state.cursorMonth);
-    const val = Math.max(0, Number(document.getElementById('requiredDaysOffInput').value) || 0);
-    await storeSet('fulltime_required_days_off:'+mk, val);
-    showToast('この月の必要休日数を保存しました');
+    const year = state.cursorYear;
+    const inputs = Array.from(document.querySelectorAll('.reqoff-input'));
+    await Promise.all(inputs.map(el=>{
+      const val = Math.max(0, Number(el.value) || 0);
+      return storeSet('fulltime_required_days_off:'+monthKey(year, Number(el.dataset.month)), val);
+    }));
+    showToast(`${year}年分の必要休日数を保存しました`);
   });
 }
 // 「毎月○日」の設定と対象月から、実際の締切日(Dateオブジェクト)を計算する
@@ -1573,15 +1581,16 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
     }
 
     // フェーズ1：正社員をまず優先配置。ただし残業（1日9時間超）はさせない
+    // 稼働時間が近い人同士は乱数で順番を入れ替え、毎回同じ人ばかりに偏らないようにする
     const fulltimeCands = available.filter(c=> c.staff.employment==='fulltime');
     if(variantKey === 'B'){
       fulltimeCands.sort((a,b)=>{
         const hz = (b.staff.hazmat?1:0) - (a.staff.hazmat?1:0);
         if(hz !== 0) return hz;
-        return runningHours[a.staff.id]-runningHours[b.staff.id];
+        return (runningHours[a.staff.id]-runningHours[b.staff.id]) + (rng()-0.5)*6;
       });
     } else {
-      fulltimeCands.sort((a,b)=> runningHours[a.staff.id]-runningHours[b.staff.id]);
+      fulltimeCands.sort((a,b)=> (runningHours[a.staff.id]-runningHours[b.staff.id]) + (rng()-0.5)*6);
     }
     fulltimeCands.forEach(cand=>{
       const result = attemptAssign(cand, Math.min(9*60, maxShiftMin), false);
@@ -1597,10 +1606,10 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
       parttimeCands.sort((a,b)=>{
         const hz = (b.staff.hazmat?1:0) - (a.staff.hazmat?1:0);
         if(hz !== 0) return hz;
-        return (runningHours[a.staff.id]-runningHours[b.staff.id]) + (rng()-0.5)*2;
+        return (runningHours[a.staff.id]-runningHours[b.staff.id]) + (rng()-0.5)*6;
       });
     } else {
-      parttimeCands.sort((a,b)=> (runningHours[a.staff.id]-runningHours[b.staff.id]) + (rng()-0.5)*2);
+      parttimeCands.sort((a,b)=> (runningHours[a.staff.id]-runningHours[b.staff.id]) + (rng()-0.5)*6);
     }
     parttimeCands.forEach(cand=> attemptAssign(cand, maxShiftMin, false));
 
