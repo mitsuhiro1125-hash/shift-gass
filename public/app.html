@@ -1566,27 +1566,45 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
     }
 
     // 割当を1件試みる共通処理。capMin=このシフトで許容する最大の長さ。allowOT=正社員の残業を許すか
-    function attemptAssign(cand, capMin, allowOT){
+    // fixedWindow指定時は、そのおおよその時間帯（開店・閉店固定用）で配置を試みる
+    function attemptAssign(cand, capMin, allowOT, fixedWindow){
       const fullHrs = hoursInRange(cand.start, cand.end);
       const helpsIdeal = fullHrs.some(h=> coverage[h] < (req[h]??0));
-      // 原則：時間帯ごとの人数は「理想人数」を超えて配置しない。
-      // 例外：新人は、社員が同時に勤務していれば理想人数を超えても配置してよい（教育目的のため）
-      if(!helpsIdeal && !cand.staff.isNewbie) return null;
+      if(!fixedWindow && !helpsIdeal && !cand.staff.isNewbie) return null;
       let assignStart = cand.start, assignEnd = cand.end;
       const fullLen = cand.end - cand.start;
 
-      if(helpsIdeal){
+      if(fixedWindow){
+        assignStart = Math.max(cand.start, fixedWindow.start);
+        assignEnd = Math.min(cand.end, fixedWindow.end);
+        if(assignEnd - assignStart > capMin){
+          if(fixedWindow.anchor==='end') assignStart = assignEnd - capMin;
+          else assignEnd = assignStart + capMin;
+        }
+        if(assignEnd <= assignStart) return null;
+      } else if(helpsIdeal){
         // 「本当に足りていない時間帯」だけをピンポイントで埋める。
-        // 既に理想人数に達している時間帯まで、シフトを無駄に延ばさないようにする
-        // （これをしないと、1時間だけ足りない時間帯のために9〜11時間フルで
-        //   人を追加してしまい、他の時間帯が理想人数を大きく超えてしまう）
+        // 既に理想人数に達している時間帯まで、シフトを無駄に延ばさないようにする。
+        // 前から埋めるか後ろから埋めるかは毎回ランダムに変え、
+        // 同じ人・同じ時間帯ばかりに偏らないようにする
         const neededHrs = fullHrs.filter(h=> coverage[h] < (req[h]??0));
-        const firstNeed = neededHrs[0];
-        let blockEndHour = firstNeed + 1;
-        while(fullHrs.includes(blockEndHour) && coverage[blockEndHour] < (req[blockEndHour]??0)) blockEndHour++;
-        let s = Math.max(cand.start, firstNeed*60);
-        let e = Math.min(cand.end, blockEndHour*60);
-        if(e - s > capMin) e = s + capMin;
+        const goForward = rng() < 0.5;
+        let s, e;
+        if(goForward || neededHrs.length===1){
+          const firstNeed = neededHrs[0];
+          let blockEndHour = firstNeed + 1;
+          while(fullHrs.includes(blockEndHour) && coverage[blockEndHour] < (req[blockEndHour]??0)) blockEndHour++;
+          s = Math.max(cand.start, firstNeed*60);
+          e = Math.min(cand.end, blockEndHour*60);
+          if(e - s > capMin) e = s + capMin;
+        } else {
+          const lastNeed = neededHrs[neededHrs.length-1];
+          let blockStartHour = lastNeed;
+          while(fullHrs.includes(blockStartHour-1) && coverage[blockStartHour-1] < (req[blockStartHour-1]??0)) blockStartHour--;
+          s = Math.max(cand.start, blockStartHour*60);
+          e = Math.min(cand.end, (lastNeed+1)*60);
+          if(e - s > capMin) s = e - capMin;
+        }
         assignStart = s; assignEnd = e;
       } else if(fullLen > capMin){
         // 新人の特例で、具体的な不足時間帯が無い場合はcapMinの長さで配置
@@ -1615,8 +1633,7 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
       return { entry, trueEnd: cand.end, fullLen };
     }
 
-    // フェーズ1：正社員をまず優先配置。ただし残業（1日9時間超）はさせない
-    // 稼働時間が近い人同士は乱数で順番を入れ替え、毎回同じ人ばかりに偏らないようにする
+    // フェーズ0：開店・閉店には最低1名は正社員を配置する
     const fulltimeCands = available.filter(c=> c.staff.employment==='fulltime');
     if(variantKey === 'B'){
       fulltimeCands.sort((a,b)=>{
@@ -1627,7 +1644,36 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
     } else {
       fulltimeCands.sort((a,b)=> (runningHours[a.staff.id]-runningHours[b.staff.id]) + (rng()-0.5)*6);
     }
-    fulltimeCands.forEach(cand=>{
+    if((req[OPEN_HOUR]??0) > 0){
+      for(const cand of fulltimeCands){
+        if(assignedIds.has(cand.staff.id)) continue;
+        if(cand.start <= OPEN_HOUR*60 && cand.end > OPEN_HOUR*60){
+          const len = Math.min(9*60, cand.end-OPEN_HOUR*60, maxShiftMin);
+          const result = attemptAssign(cand, len, false, {start:OPEN_HOUR*60, end:OPEN_HOUR*60+len, anchor:'start'});
+          if(result){
+            if(result.fullLen > 9*60) otExtendCandidates.push({ entry: result.entry, staffId: cand.staff.id, trueEnd: result.trueEnd });
+            break;
+          }
+        }
+      }
+    }
+    if((req[CLOSE_HOUR-1]??0) > 0){
+      for(const cand of fulltimeCands){
+        if(assignedIds.has(cand.staff.id)) continue;
+        if(cand.start < CLOSE_HOUR*60 && cand.end >= CLOSE_HOUR*60){
+          const len = Math.min(9*60, CLOSE_HOUR*60-cand.start, maxShiftMin);
+          const result = attemptAssign(cand, len, false, {start:CLOSE_HOUR*60-len, end:CLOSE_HOUR*60, anchor:'end'});
+          if(result){
+            if(result.fullLen > 9*60) otExtendCandidates.push({ entry: result.entry, staffId: cand.staff.id, trueEnd: result.trueEnd });
+            break;
+          }
+        }
+      }
+    }
+
+    // フェーズ1：残りの正社員を優先配置。ただし残業（1日9時間超）はさせない
+    // 稼働時間が近い人同士は乱数で順番を入れ替え、毎回同じ人ばかりに偏らないようにする
+    fulltimeCands.filter(c=>!assignedIds.has(c.staff.id)).forEach(cand=>{
       const result = attemptAssign(cand, Math.min(9*60, maxShiftMin), false);
       if(result && result.fullLen > 9*60){
         otExtendCandidates.push({ entry: result.entry, staffId: cand.staff.id, trueEnd: result.trueEnd });
