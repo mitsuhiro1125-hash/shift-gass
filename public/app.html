@@ -1088,14 +1088,20 @@ function renderScheduleGrid(schedule, allReq){
     const closed = closedWeekdays.includes(dow);
     const ds = dateStr(y,m,d);
     let idealPeak = 0, minPeak = 0, cost = 0;
-    let assignedCount = 0;
+    let assignedPeak = 0, totalStaffCount = 0;
     if(!closed){
       idealPeak = Math.max(0, ...HOURS.map(h=> reqIdeal[h]??0));
       minPeak = Math.max(0, ...HOURS.map(h=> reqMin[h]??0));
-      assignedCount = new Set((schedule[ds]||[]).map(e=>e.staffId)).size;
-      cost = calcDayCost(schedule[ds]||[]);
+      const entries = schedule[ds]||[];
+      const hourCoverage = {}; HOURS.forEach(h=> hourCoverage[h]=0);
+      entries.forEach(e=>{
+        hoursInRange(toMin(e.start), toMin(e.end)).forEach(h=> hourCoverage[h]=(hourCoverage[h]||0)+1);
+      });
+      assignedPeak = Math.max(0, ...HOURS.map(h=> hourCoverage[h]));
+      totalStaffCount = new Set(entries.map(e=>e.staffId)).size;
+      cost = calcDayCost(entries);
     }
-    return { d, ds, dow, closed, idealPeak, minPeak, assignedCount, cost, shortage: assignedCount-idealPeak };
+    return { d, ds, dow, closed, idealPeak, minPeak, assignedPeak, totalStaffCount, cost, shortage: assignedPeak-idealPeak };
   });
 
   const totalCost = dayStats.reduce((a,x)=>a+x.cost, 0);
@@ -1110,8 +1116,8 @@ function renderScheduleGrid(schedule, allReq){
   const summaryIdealRow = dayStats.map(ds=> `<td>${ds.closed?'-':ds.idealPeak}</td>`).join('');
   const summaryAssignedRow = dayStats.map(ds=>{
     if(ds.closed) return '<td>-</td>';
-    const cls = ds.assignedCount < ds.minPeak ? 'shortage-neg' : (ds.assignedCount < ds.idealPeak ? 'shortage-mid' : 'shortage-pos');
-    return `<td class="${cls}">${ds.assignedCount}</td>`;
+    const cls = ds.assignedPeak < ds.minPeak ? 'shortage-neg' : (ds.assignedPeak < ds.idealPeak ? 'shortage-mid' : 'shortage-pos');
+    return `<td class="${cls}">${ds.assignedPeak}</td>`;
   }).join('');
   const summaryShortageRow = dayStats.map(ds=>{
     if(ds.closed) return '<td>-</td>';
@@ -1119,6 +1125,7 @@ function renderScheduleGrid(schedule, allReq){
     const label = ds.shortage>0? '+'+ds.shortage : ds.shortage;
     return `<td class="${cls}">${label}</td>`;
   }).join('');
+  const summaryTotalStaffRow = dayStats.map(ds=> `<td style="color:var(--muted);">${ds.closed?'-':ds.totalStaffCount}</td>`).join('');
   const summaryCostRow = dayStats.map(ds=> `<td style="font-family:var(--mono); font-size:10px;">${ds.closed?'-':'¥'+Math.round(ds.cost).toLocaleString()}</td>`).join('');
 
   const staffRows = state.staffList.map((s,idx)=>{
@@ -1140,7 +1147,7 @@ function renderScheduleGrid(schedule, allReq){
   return `
   <div class="panel">
     <h2>スタッフ別シフト表</h2>
-    <p class="desc">日付をクリックすると、その日の割当を編集できます。配置人数が赤字＝最低人数を割っています／オレンジ＝最低は満たすが理想には未達です。</p>
+    <p class="desc">日付をクリックすると、その日の割当を編集できます。「配置人数(最大同時)」は、その日の中で最も人が重なる時間帯の人数です。赤字＝最低人数を割っています／オレンジ＝最低は満たすが理想には未達です。</p>
     <div class="stat-cards" style="margin-bottom:14px;">
       <div class="stat-card"><div class="num">¥${Math.round(totalCost).toLocaleString()}</div><div class="lbl">今月の人件費合計（パート：時給×時間／社員：¥25,000／日）</div></div>
     </div>
@@ -1152,8 +1159,9 @@ function renderScheduleGrid(schedule, allReq){
         <tbody>
           <tr class="summary-row"><td class="staff-col">最低人数</td>${summaryMinRow}</tr>
           <tr class="summary-row"><td class="staff-col">理想人数</td>${summaryIdealRow}</tr>
-          <tr class="summary-row"><td class="staff-col">配置人数</td>${summaryAssignedRow}</tr>
+          <tr class="summary-row"><td class="staff-col">配置人数(最大同時)</td>${summaryAssignedRow}</tr>
           <tr class="summary-row"><td class="staff-col">過不足(理想比)</td>${summaryShortageRow}</tr>
+          <tr class="summary-row"><td class="staff-col">延べ出勤人数</td>${summaryTotalStaffRow}</tr>
           <tr class="summary-row"><td class="staff-col">人件費/日</td>${summaryCostRow}</tr>
           ${staffRows}
         </tbody>
@@ -1566,12 +1574,26 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
       if(!helpsIdeal && !cand.staff.isNewbie) return null;
       let assignStart = cand.start, assignEnd = cand.end;
       const fullLen = cand.end - cand.start;
-      if(fullLen > capMin){
-        const targetHour = helpsIdeal ? fullHrs.find(h=> coverage[h] < (req[h]??0)) : null;
-        let targetStart = targetHour!=null ? Math.max(cand.start, targetHour*60) : cand.start;
-        assignStart = Math.max(cand.start, Math.min(targetStart, cand.end - capMin));
-        assignEnd = assignStart + capMin;
+
+      if(helpsIdeal){
+        // 「本当に足りていない時間帯」だけをピンポイントで埋める。
+        // 既に理想人数に達している時間帯まで、シフトを無駄に延ばさないようにする
+        // （これをしないと、1時間だけ足りない時間帯のために9〜11時間フルで
+        //   人を追加してしまい、他の時間帯が理想人数を大きく超えてしまう）
+        const neededHrs = fullHrs.filter(h=> coverage[h] < (req[h]??0));
+        const firstNeed = neededHrs[0];
+        let blockEndHour = firstNeed + 1;
+        while(fullHrs.includes(blockEndHour) && coverage[blockEndHour] < (req[blockEndHour]??0)) blockEndHour++;
+        let s = Math.max(cand.start, firstNeed*60);
+        let e = Math.min(cand.end, blockEndHour*60);
+        if(e - s > capMin) e = s + capMin;
+        assignStart = s; assignEnd = e;
+      } else if(fullLen > capMin){
+        // 新人の特例で、具体的な不足時間帯が無い場合はcapMinの長さで配置
+        assignStart = cand.start;
+        assignEnd = cand.start + capMin;
       }
+
       if(cand.staff.employment === 'fulltime'){
         const dailyOT = Math.max(0, (assignEnd-assignStart)/60 - 9);
         if(dailyOT > 0 && !allowOT) return null;
