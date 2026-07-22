@@ -1540,6 +1540,25 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
   const shiftLengthWarningDays = [];
   const understaffedWarningDays = []; // 最低人数を割り込んだ日
 
+  // 正社員の必要休日数を、月末に偏らせず月内にできるだけ均等に配置する。
+  // （そうしないと「休みを使い切るまで働き続ける→月末に正社員が1人もいない」ことが起きるため）
+  const fulltimeStaffList = state.staffList.filter(s=>s.employment==='fulltime');
+  const forcedRestDays = {}; // staffId -> Set(day番号)
+  fulltimeStaffList.forEach((s, idx)=>{
+    const restCount = Number(monthlyRequiredDaysOff)||0;
+    const set = new Set();
+    if(restCount > 0){
+      const interval = daysInMonth / (restCount + 1);
+      const offset = (idx * interval) / Math.max(1, fulltimeStaffList.length); // 人ごとに休みの位置をずらす
+      for(let i=1; i<=restCount; i++){
+        let day = Math.round(offset + i*interval);
+        day = Math.max(1, Math.min(daysInMonth, day));
+        set.add(day);
+      }
+    }
+    forcedRestDays[s.id] = set;
+  });
+
   Object.keys(availability).sort().forEach(ds=>{
     const dayInfo = availability[ds];
     if(dayInfo.closed) return;
@@ -1548,10 +1567,10 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
     let available = dayInfo.list.map(item=>({
       staff: state.staffList.find(x=>x.id===item.staffId), start:item.start, end:item.end
     })).filter(x=>x.staff).filter(x=>{
-      // 正社員は「必要休日数」（店舗設定・月ごと）の分だけ月内に休みを確保する
+      // 正社員は、月内に均等配置された「必要休日数」の日は稼働不可とする
       if(x.staff.employment !== 'fulltime') return true;
-      const maxWorkDays = daysInMonth - (Number(monthlyRequiredDaysOff)||0);
-      return workDaysCount[x.staff.id] < maxWorkDays;
+      const restDays = forcedRestDays[x.staff.id];
+      return !restDays || !restDays.has(dd);
     });
 
     const maxShiftMin = maxShiftMinGlobal;
@@ -1610,6 +1629,21 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
         // 新人の特例で、具体的な不足時間帯が無い場合はcapMinの長さで配置
         assignStart = cand.start;
         assignEnd = cand.start + capMin;
+      }
+
+      // パート・学生は、1シフト入る場合は最低3時間は確保する。
+      // これによって、その時間帯の理想人数を超えることがあっても良いこととする
+      // （1〜2時間だけの細切れシフトを避けるため）
+      const PARTTIME_MIN_SHIFT_MIN = 180;
+      if(cand.staff.employment !== 'fulltime' && (assignEnd - assignStart) < PARTTIME_MIN_SHIFT_MIN){
+        const needed = PARTTIME_MIN_SHIFT_MIN - (assignEnd - assignStart);
+        const extendForward = Math.min(needed, cand.end - assignEnd);
+        assignEnd += extendForward;
+        const remaining = needed - extendForward;
+        if(remaining > 0){
+          const extendBackward = Math.min(remaining, assignStart - cand.start);
+          assignStart -= extendBackward;
+        }
       }
 
       if(cand.staff.employment === 'fulltime'){
