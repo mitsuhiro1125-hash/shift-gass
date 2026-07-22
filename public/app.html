@@ -1185,6 +1185,7 @@ async function renderScheduler(){
   const wageWarnings = meta.wageWarnings || [];
   const shiftLenWarnings = meta.shiftLengthWarningDays || [];
   const understaffedWarnings = meta.understaffedWarningDays || [];
+  const excessiveOffWarnings = meta.excessiveOffWarnings || [];
   const candidates = await storeGet('schedule_candidates:'+mk) || [];
 
   const candidatesHtml = candidates.length ? `
@@ -1203,6 +1204,7 @@ async function renderScheduler(){
               <div>最低保証賃金 未達：<strong style="color:${c.stats.wageShortfallCount>0?'var(--red)':'var(--green)'};">${c.stats.wageShortfallCount}名</strong></div>
               <div>最大労働時間 超過：<strong style="color:${c.stats.shiftLenViolationCount>0?'var(--red)':'var(--green)'};">${c.stats.shiftLenViolationCount}日</strong></div>
               <div>最低人数 割れ：<strong style="color:${c.stats.understaffedCount>0?'var(--red)':'var(--green)'};">${c.stats.understaffedCount}日</strong></div>
+              <div>希望休が過多な正社員：<strong style="color:${c.stats.excessiveOffCount>0?'var(--red)':'var(--green)'};">${c.stats.excessiveOffCount}名</strong></div>
             </div>
             <div style="display:flex; gap:6px; margin-top:12px;">
               <button class="btn btn-ghost btn-sm" data-preview="${c.key}" style="flex:1;">プレビュー</button>
@@ -1233,6 +1235,7 @@ async function renderScheduler(){
     ${wageWarnings.length ? `<div class="desc" style="color:var(--red); margin-top:6px;">⚠ 最低保証賃金に届いていない可能性があるスタッフ：${wageWarnings.join('／')}</div>` : ''}
     ${shiftLenWarnings.length ? `<div class="desc" style="color:var(--red); margin-top:6px;">⚠ 最大労働時間（${state.storeSettings.maxShiftHours ?? 11}時間）を超えて調整した日：${shiftLenWarnings.join('、')}</div>` : ''}
     ${understaffedWarnings.length ? `<div class="desc" style="color:var(--red); margin-top:6px; font-weight:700;">🚨 最低人数を割り込んでいる日：${understaffedWarnings.join('、')}</div>` : ''}
+    ${excessiveOffWarnings.length ? `<div class="desc" style="color:var(--red); margin-top:6px; font-weight:700;">🚨 希望休が必要休日数を超えている正社員：${excessiveOffWarnings.join('／')}（本人の希望休は尊重していますが、出勤日が大きく減っている可能性があります。内容をご確認ください）</div>` : ''}
   </div>
   ${candidatesHtml}
   <div id="candidatePreviewHost"></div>
@@ -1542,9 +1545,12 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
 
   // 正社員の必要休日数を、月末に偏らせず月内にできるだけ均等に配置する。
   // （そうしないと「休みを使い切るまで働き続ける→月末に正社員が1人もいない」ことが起きるため）
-  // 希望休を出している日は、それを優先して休日数としてカウントする
+  // 希望休を出している日は、それを優先して休日数としてカウントする。
+  // ただし、希望休が必要休日数を大幅に超えている場合は、そのまま全部休みにはせず、
+  // 「本人の希望休は尊重しつつ、明らかに異常な件数なら警告する」形にする
   const fulltimeStaffList = state.staffList.filter(s=>s.employment==='fulltime');
   const forcedRestDays = {}; // staffId -> Set(day番号)
+  const excessiveOffWarnings = []; // 希望休が必要休日数を大きく超えているスタッフへの警告
   fulltimeStaffList.forEach((s, idx)=>{
     const restCount = Number(monthlyRequiredDaysOff)||0;
     const set = new Set();
@@ -1553,6 +1559,9 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
       const d = Number(r.date.split('-')[2]);
       if(!Number.isNaN(d)) set.add(d);
     });
+    if(set.size > restCount){
+      excessiveOffWarnings.push(`${s.name}（希望休が${set.size}日あり、必要休日数${restCount}日を超えています）`);
+    }
     const remaining = Math.max(0, restCount - set.size);
     if(remaining > 0){
       const interval = daysInMonth / (remaining + 1);
@@ -1886,7 +1895,7 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
     }
   });
 
-  return { schedule, warningDays, shiftLengthWarningDays, understaffedWarningDays, runningHours, wageWarnings };
+  return { schedule, warningDays, shiftLengthWarningDays, understaffedWarningDays, excessiveOffWarnings, runningHours, wageWarnings };
 }
 
 function computeCandidateStats(result){
@@ -1907,6 +1916,7 @@ function computeCandidateStats(result){
     wageShortfallCount: result.wageWarnings.length,
     shiftLenViolationCount: result.shiftLengthWarningDays.length,
     understaffedCount: result.understaffedWarningDays.length,
+    excessiveOffCount: result.excessiveOffWarnings.length,
   };
 }
 
@@ -1919,7 +1929,7 @@ async function generateCandidates(){
   const candidates = CANDIDATE_VARIANTS.map(v=>{
     const result = generateOneSchedule(v.key, y, m, allReq, monthlyRequiredDaysOff);
     const stats = computeCandidateStats(result);
-    return { key:v.key, label:v.label, desc:v.desc, schedule:result.schedule, warningDays:result.warningDays, wageWarnings:result.wageWarnings, shiftLengthWarningDays:result.shiftLengthWarningDays, understaffedWarningDays:result.understaffedWarningDays, stats };
+    return { key:v.key, label:v.label, desc:v.desc, schedule:result.schedule, warningDays:result.warningDays, wageWarnings:result.wageWarnings, shiftLengthWarningDays:result.shiftLengthWarningDays, understaffedWarningDays:result.understaffedWarningDays, excessiveOffWarnings:result.excessiveOffWarnings, stats };
   });
   await storeSet('schedule_candidates:'+mk, candidates);
   return candidates;
@@ -1932,7 +1942,7 @@ async function adoptCandidate(candidateKey){
   const chosen = candidates.find(c=>c.key===candidateKey);
   if(!chosen) return;
   await storeSet('schedule:'+mk, chosen.schedule);
-  await storeSet('schedule_meta:'+mk, { status:'draft', generatedAt: new Date().toISOString(), warnings: chosen.warningDays, wageWarnings: chosen.wageWarnings || [], shiftLengthWarningDays: chosen.shiftLengthWarningDays || [], understaffedWarningDays: chosen.understaffedWarningDays || [], adoptedVariant: chosen.key });
+  await storeSet('schedule_meta:'+mk, { status:'draft', generatedAt: new Date().toISOString(), warnings: chosen.warningDays, wageWarnings: chosen.wageWarnings || [], shiftLengthWarningDays: chosen.shiftLengthWarningDays || [], understaffedWarningDays: chosen.understaffedWarningDays || [], excessiveOffWarnings: chosen.excessiveOffWarnings || [], adoptedVariant: chosen.key });
   await storeSet('schedule_candidates:'+mk, []); // 採用後は候補をクリア
 }
 
