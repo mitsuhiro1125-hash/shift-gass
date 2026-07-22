@@ -1542,17 +1542,26 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
 
   // 正社員の必要休日数を、月末に偏らせず月内にできるだけ均等に配置する。
   // （そうしないと「休みを使い切るまで働き続ける→月末に正社員が1人もいない」ことが起きるため）
+  // 希望休を出している日は、それを優先して休日数としてカウントする
   const fulltimeStaffList = state.staffList.filter(s=>s.employment==='fulltime');
   const forcedRestDays = {}; // staffId -> Set(day番号)
   fulltimeStaffList.forEach((s, idx)=>{
     const restCount = Number(monthlyRequiredDaysOff)||0;
     const set = new Set();
-    if(restCount > 0){
-      const interval = daysInMonth / (restCount + 1);
+    // 希望休（終日）を優先的に休みとしてカウントする
+    (allReq[s.id]||[]).filter(r=>r.allDay).forEach(r=>{
+      const d = Number(r.date.split('-')[2]);
+      if(!Number.isNaN(d)) set.add(d);
+    });
+    const remaining = Math.max(0, restCount - set.size);
+    if(remaining > 0){
+      const interval = daysInMonth / (remaining + 1);
       const offset = (idx * interval) / Math.max(1, fulltimeStaffList.length); // 人ごとに休みの位置をずらす
-      for(let i=1; i<=restCount; i++){
+      for(let i=1; i<=remaining; i++){
         let day = Math.round(offset + i*interval);
         day = Math.max(1, Math.min(daysInMonth, day));
+        let attempts = 0;
+        while(set.has(day) && attempts < daysInMonth){ day = (day % daysInMonth) + 1; attempts++; }
         set.add(day);
       }
     }
@@ -1586,10 +1595,11 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
 
     // 割当を1件試みる共通処理。capMin=このシフトで許容する最大の長さ。allowOT=正社員の残業を許すか
     // fixedWindow指定時は、そのおおよその時間帯（開店・閉店固定用）で配置を試みる
-    function attemptAssign(cand, capMin, allowOT, fixedWindow){
+    // mandatory=trueの場合、需要が無くても配置する（正社員は休日以外は必ず出勤するため）
+    function attemptAssign(cand, capMin, allowOT, fixedWindow, mandatory){
       const fullHrs = hoursInRange(cand.start, cand.end);
       const helpsIdeal = fullHrs.some(h=> coverage[h] < (req[h]??0));
-      if(!fixedWindow && !helpsIdeal && !cand.staff.isNewbie) return null;
+      if(!fixedWindow && !helpsIdeal && !cand.staff.isNewbie && !mandatory) return null;
       let assignStart = cand.start, assignEnd = cand.end;
       const fullLen = cand.end - cand.start;
 
@@ -1626,9 +1636,15 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
         }
         assignStart = s; assignEnd = e;
       } else if(fullLen > capMin){
-        // 新人の特例で、具体的な不足時間帯が無い場合はcapMinの長さで配置
-        assignStart = cand.start;
-        assignEnd = cand.start + capMin;
+        // 新人の特例、または正社員の必須出勤で、具体的な不足時間帯が無い場合。
+        // 前から詰めるか後ろから詰めるかをランダムに変え、偏りを抑える
+        if(rng() < 0.5){
+          assignStart = cand.start;
+          assignEnd = cand.start + capMin;
+        } else {
+          assignEnd = cand.end;
+          assignStart = cand.end - capMin;
+        }
       }
 
       // パート・学生は、1シフト入る場合は最低3時間は確保する。
@@ -1707,8 +1723,9 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
 
     // フェーズ1：残りの正社員を優先配置。ただし残業（1日9時間超）はさせない
     // 稼働時間が近い人同士は乱数で順番を入れ替え、毎回同じ人ばかりに偏らないようにする
+    // 正社員は「必要休日数」の休み以外は必ず出勤するため、需要が無くてもmandatory=trueで配置する
     fulltimeCands.filter(c=>!assignedIds.has(c.staff.id)).forEach(cand=>{
-      const result = attemptAssign(cand, Math.min(9*60, maxShiftMin), false);
+      const result = attemptAssign(cand, Math.min(9*60, maxShiftMin), false, null, true);
       if(result && result.fullLen > 9*60){
         otExtendCandidates.push({ entry: result.entry, staffId: cand.staff.id, trueEnd: result.trueEnd });
       }
