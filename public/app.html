@@ -354,6 +354,7 @@ async function init(){
       employment: d.employment, isStudent: false,
       hourlyWage: d.employment==='fulltime' ? 0 : 1000,
       guaranteedMonthlyHours: 0,
+      maxMonthlyHours: 0,
       otProhibited: false,
       monthlyOTLimit: d.employment==='fulltime' ? 40 : 0,
       basePattern: defaultBasePattern()
@@ -546,7 +547,7 @@ function renderStaffMaster(){
       <td>${({fulltime:'正社員',parttime:'パート',student:'学生'})[s.employment] || s.employment}</td>
       <td>${offDaysLabel(s)}</td>
       <td style="font-family:var(--mono);">${s.employment==='fulltime' ? '-' : '¥'+Number(s.hourlyWage||0).toLocaleString()+'/h'}</td>
-      <td style="font-family:var(--mono);">${s.employment==='fulltime' ? (s.otProhibited ? '残業不可' : (Number(s.monthlyOTLimit||40)+'h/月まで残業可')) : (s.guaranteedMonthlyHours ? s.guaranteedMonthlyHours+'h/月保証' : '-')}</td>
+      <td style="font-family:var(--mono);">${s.employment==='fulltime' ? (s.otProhibited ? '残業不可' : (Number(s.monthlyOTLimit||40)+'h/月まで残業可')) : [s.guaranteedMonthlyHours?s.guaranteedMonthlyHours+'h保証':'', s.maxMonthlyHours?s.maxMonthlyHours+'h上限':''].filter(Boolean).join('/') || '-'}</td>
       <td style="text-align:right;">
         <button class="btn btn-ghost btn-sm" data-edit="${s.id}">編集</button>
         <button class="btn btn-danger btn-sm" data-del="${s.id}">削除</button>
@@ -588,7 +589,7 @@ function bindStaffMaster(){
 }
 function openStaffModal(id){
   const editing = id ? state.staffList.find(s=>s.id===id) : null;
-  const s = editing || { id: uid(), name:'', password:'', isAdmin:false, hazmat:false, isNewbie:false, employment:'parttime', isStudent:false, hourlyWage:1000, guaranteedMonthlyHours:0, otProhibited:false, monthlyOTLimit:40, basePattern: defaultBasePattern() };
+  const s = editing || { id: uid(), name:'', password:'', isAdmin:false, hazmat:false, isNewbie:false, employment:'parttime', isStudent:false, hourlyWage:1000, guaranteedMonthlyHours:0, maxMonthlyHours:0, otProhibited:false, monthlyOTLimit:40, basePattern: defaultBasePattern() };
   const host = document.getElementById('staffModalHost');
   host.innerHTML = `
   <div class="modal-backdrop">
@@ -609,8 +610,9 @@ function openStaffModal(id){
       <div id="wageFields" class="row" style="display:${s.employment==='fulltime'?'none':'flex'};">
         <div class="field"><label>時給（円）</label><input type="number" min="0" step="1" id="f_wage" value="${s.hourlyWage ?? 1000}"></div>
         <div class="field"><label>保証時間（月間・時間）</label><input type="number" min="0" step="1" id="f_guaranteedhours" value="${s.guaranteedMonthlyHours ?? 0}"></div>
+        <div class="field"><label>上限時間（月間・時間）</label><input type="number" min="0" step="1" id="f_maxhours" value="${s.maxMonthlyHours ?? 0}"></div>
       </div>
-      <p id="wageHint" class="hint" style="margin-top:-8px; display:${s.employment==='fulltime'?'none':'block'};">保証時間を入力すると、自動シフト作成時にできるだけこの時間数に届くよう優先的にシフトが追加されます（0なら保証なし）。</p>
+      <p id="wageHint" class="hint" style="margin-top:-8px; display:${s.employment==='fulltime'?'none':'block'};">保証時間を入力すると、できるだけその時間数に届くよう優先的にシフトが追加されます。上限時間を入力すると、社会保険の加入基準などを踏まえて、それ以上は働かせないようにします（どちらも0なら指定なし）。</p>
       <div id="fulltimeFields" style="display:${s.employment==='fulltime'?'block':'none'};">
         <div class="row">
           <div class="field" style="max-width:220px;">
@@ -688,6 +690,7 @@ function openStaffModal(id){
       isStudent: employment === 'student',
       hourlyWage: isFulltime ? 0 : (Number(document.getElementById('f_wage').value) || 0),
       guaranteedMonthlyHours: isFulltime ? 0 : (Number(document.getElementById('f_guaranteedhours').value) || 0),
+      maxMonthlyHours: isFulltime ? 0 : (Number(document.getElementById('f_maxhours').value) || 0),
       otProhibited,
       monthlyOTLimit: isFulltime ? (otProhibited ? 0 : (Number(document.getElementById('f_otlimit').value) || 40)) : 0,
       basePattern: newPattern
@@ -1719,6 +1722,20 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
         }
       }
 
+      // パート・学生は、月間の上限時間（社会保険の加入基準対策など）を超えないようにする
+      if(cand.staff.employment !== 'fulltime'){
+        const maxHrs = Number(cand.staff.maxMonthlyHours) || 0;
+        if(maxHrs > 0){
+          const remainingHrs = maxHrs - (runningHours[cand.staff.id]||0);
+          if(remainingHrs <= 0) return null;
+          const remainingMin = remainingHrs*60;
+          if((assignEnd-assignStart) > remainingMin){
+            if(remainingMin < 60) return null; // 残りがほぼ無ければ配置しない
+            assignEnd = assignStart + remainingMin;
+          }
+        }
+      }
+
       if(cand.staff.employment === 'fulltime'){
         const dailyOT = Math.max(0, (assignEnd-assignStart)/60 - 9);
         if(dailyOT > 0 && !allowOT) return null;
@@ -1902,6 +1919,7 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
   state.staffList.forEach(s=>{
     const targetHours = Number(s.guaranteedMonthlyHours) || 0;
     if(targetHours <= 0) return;
+    const maxHrs = Number(s.maxMonthlyHours) || 0;
     let currentHours = runningHours[s.id]||0;
     if(currentHours >= targetHours) return;
 
@@ -1915,10 +1933,16 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
 
     for(const ds of candidateDates){
       if(currentHours >= targetHours) break;
+      if(maxHrs > 0 && currentHours >= maxHrs) break; // 上限時間に達したらそれ以上は増やさない
       const item = availability[ds].list.find(x=>x.staffId===s.id);
       if(!item) continue;
-      const itemLen = item.end - item.start;
-      const cappedEnd = itemLen > maxShiftMinGlobal ? item.start + maxShiftMinGlobal : item.end;
+      let itemLen = item.end - item.start;
+      let cappedEnd = itemLen > maxShiftMinGlobal ? item.start + maxShiftMinGlobal : item.end;
+      if(maxHrs > 0){
+        const remainingMin = (maxHrs - currentHours) * 60;
+        if(remainingMin < 60) break;
+        if(cappedEnd - item.start > remainingMin) cappedEnd = item.start + remainingMin;
+      }
       const cov = hourlyCoverageOf(ds);
       const wouldExceedIdeal = hoursInRange(item.start, cappedEnd).some(h=> (cov[h]||0) >= (req[h]??0));
       if(wouldExceedIdeal) continue; // この日は理想人数を超えてしまうためスキップ
