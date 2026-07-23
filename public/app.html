@@ -353,8 +353,7 @@ async function init(){
       id: uid(), name: d.name, password: '0000', isAdmin: d.isAdmin, hazmat: d.hazmat, isNewbie: false,
       employment: d.employment, isStudent: false,
       hourlyWage: d.employment==='fulltime' ? 0 : 1000,
-      minGuaranteeWage: 0,
-      desiredMonthlyHours: 0,
+      guaranteedMonthlyHours: 0,
       otProhibited: false,
       monthlyOTLimit: d.employment==='fulltime' ? 40 : 0,
       basePattern: defaultBasePattern()
@@ -374,6 +373,7 @@ function render(){
     app.innerHTML = renderShell();
     bindShell();
   }
+  document.querySelectorAll('.toast').forEach(el=> el.remove());
   if(state.toast){
     const t = document.createElement('div');
     t.className='toast'; t.textContent = state.toast;
@@ -546,7 +546,7 @@ function renderStaffMaster(){
       <td>${({fulltime:'正社員',parttime:'パート',student:'学生'})[s.employment] || s.employment}</td>
       <td>${offDaysLabel(s)}</td>
       <td style="font-family:var(--mono);">${s.employment==='fulltime' ? '-' : '¥'+Number(s.hourlyWage||0).toLocaleString()+'/h'}</td>
-      <td style="font-family:var(--mono);">${s.employment==='fulltime' ? (s.otProhibited ? '残業不可' : (Number(s.monthlyOTLimit||40)+'h/月まで残業可')) : (s.minGuaranteeWage ? '¥'+Number(s.minGuaranteeWage).toLocaleString() : '-')}</td>
+      <td style="font-family:var(--mono);">${s.employment==='fulltime' ? (s.otProhibited ? '残業不可' : (Number(s.monthlyOTLimit||40)+'h/月まで残業可')) : (s.guaranteedMonthlyHours ? s.guaranteedMonthlyHours+'h/月保証' : '-')}</td>
       <td style="text-align:right;">
         <button class="btn btn-ghost btn-sm" data-edit="${s.id}">編集</button>
         <button class="btn btn-danger btn-sm" data-del="${s.id}">削除</button>
@@ -558,7 +558,7 @@ function renderStaffMaster(){
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
       <div>
         <h2>スタッフマスタ管理</h2>
-        <p class="desc">在籍スタッフ ${state.staffList.length}名 / 名前・資格・固定休み・基本稼働パターンを登録します（正社員は必要休日数、パート・学生は時給・最低保証賃金を設定）</p>
+        <p class="desc">在籍スタッフ ${state.staffList.length}名 / 名前・資格・固定休み・基本稼働パターンを登録します（正社員は必要休日数、パート・学生は時給・保証時間を設定）</p>
       </div>
       <button class="btn btn-amber" id="addStaffBtn">＋ スタッフを追加</button>
     </div>
@@ -588,7 +588,7 @@ function bindStaffMaster(){
 }
 function openStaffModal(id){
   const editing = id ? state.staffList.find(s=>s.id===id) : null;
-  const s = editing || { id: uid(), name:'', password:'', isAdmin:false, hazmat:false, isNewbie:false, employment:'parttime', isStudent:false, hourlyWage:1000, minGuaranteeWage:0, desiredMonthlyHours:0, otProhibited:false, monthlyOTLimit:40, basePattern: defaultBasePattern() };
+  const s = editing || { id: uid(), name:'', password:'', isAdmin:false, hazmat:false, isNewbie:false, employment:'parttime', isStudent:false, hourlyWage:1000, guaranteedMonthlyHours:0, otProhibited:false, monthlyOTLimit:40, basePattern: defaultBasePattern() };
   const host = document.getElementById('staffModalHost');
   host.innerHTML = `
   <div class="modal-backdrop">
@@ -608,10 +608,9 @@ function openStaffModal(id){
       </div>
       <div id="wageFields" class="row" style="display:${s.employment==='fulltime'?'none':'flex'};">
         <div class="field"><label>時給（円）</label><input type="number" min="0" step="1" id="f_wage" value="${s.hourlyWage ?? 1000}"></div>
-        <div class="field"><label>最低保証賃金（円／月）</label><input type="number" min="0" step="100" id="f_guarantee" value="${s.minGuaranteeWage ?? 0}"></div>
-        <div class="field"><label>希望月間総労働時間（時間）</label><input type="number" min="0" step="1" id="f_desiredhours" value="${s.desiredMonthlyHours ?? 0}"></div>
+        <div class="field"><label>保証時間（月間・時間）</label><input type="number" min="0" step="1" id="f_guaranteedhours" value="${s.guaranteedMonthlyHours ?? 0}"></div>
       </div>
-      <p id="wageHint" class="hint" style="margin-top:-8px; display:${s.employment==='fulltime'?'none':'block'};">最低保証賃金や希望月間総労働時間を入力すると、自動シフト作成時にできるだけその条件を満たすように優先的にシフトが追加されます（0なら特に指定なし）。</p>
+      <p id="wageHint" class="hint" style="margin-top:-8px; display:${s.employment==='fulltime'?'none':'block'};">保証時間を入力すると、自動シフト作成時にできるだけこの時間数に届くよう優先的にシフトが追加されます（0なら保証なし）。</p>
       <div id="fulltimeFields" style="display:${s.employment==='fulltime'?'block':'none'};">
         <div class="row">
           <div class="field" style="max-width:220px;">
@@ -688,8 +687,7 @@ function openStaffModal(id){
       employment,
       isStudent: employment === 'student',
       hourlyWage: isFulltime ? 0 : (Number(document.getElementById('f_wage').value) || 0),
-      minGuaranteeWage: isFulltime ? 0 : (Number(document.getElementById('f_guarantee').value) || 0),
-      desiredMonthlyHours: isFulltime ? 0 : (Number(document.getElementById('f_desiredhours').value) || 0),
+      guaranteedMonthlyHours: isFulltime ? 0 : (Number(document.getElementById('f_guaranteedhours').value) || 0),
       otProhibited,
       monthlyOTLimit: isFulltime ? (otProhibited ? 0 : (Number(document.getElementById('f_otlimit').value) || 40)) : 0,
       basePattern: newPattern
@@ -1186,9 +1184,13 @@ async function renderScheduler(){
   const shiftLenWarnings = meta.shiftLengthWarningDays || [];
   const understaffedWarnings = meta.understaffedWarningDays || [];
   const excessiveOffWarnings = meta.excessiveOffWarnings || [];
-  const requestedOffCounts = meta.requestedOffCounts || {};
+  const restDayBreakdown = meta.restDayBreakdown || {};
   const fulltimeDiagList = state.staffList.filter(s=>s.employment==='fulltime')
-    .map(s=> `${escapeHtml(s.name)}: ${requestedOffCounts[s.id] ?? 0}日`).join('／');
+    .map(s=>{
+      const b = restDayBreakdown[s.id];
+      if(!b) return `${escapeHtml(s.name)}: -`;
+      return `${escapeHtml(s.name)}: 希望休${b.requested}+店休${b.closed}+自動${b.auto}=計${b.total}日（設定:${b.required}日）`;
+    }).join('／');
   const candidates = await storeGet('schedule_candidates:'+mk) || [];
 
   const candidatesHtml = candidates.length ? `
@@ -1204,7 +1206,7 @@ async function renderScheduler(){
               <div>合計残業時間：<strong>${c.stats.totalOvertime}h</strong></div>
               <div>勤務時間のばらつき：<strong>${c.stats.hoursStdDev}</strong>（小さいほど均等）</div>
               <div>資格者不足の可能性：<strong style="color:${c.stats.warningCount>0?'var(--red)':'var(--green)'};">${c.stats.warningCount}日</strong></div>
-              <div>最低保証賃金 未達：<strong style="color:${c.stats.wageShortfallCount>0?'var(--red)':'var(--green)'};">${c.stats.wageShortfallCount}名</strong></div>
+              <div>保証時間 未達：<strong style="color:${c.stats.wageShortfallCount>0?'var(--red)':'var(--green)'};">${c.stats.wageShortfallCount}名</strong></div>
               <div>最大労働時間 超過：<strong style="color:${c.stats.shiftLenViolationCount>0?'var(--red)':'var(--green)'};">${c.stats.shiftLenViolationCount}日</strong></div>
               <div>最低人数 割れ：<strong style="color:${c.stats.understaffedCount>0?'var(--red)':'var(--green)'};">${c.stats.understaffedCount}日</strong></div>
               <div>希望休が過多な正社員：<strong style="color:${c.stats.excessiveOffCount>0?'var(--red)':'var(--green)'};">${c.stats.excessiveOffCount}名</strong></div>
@@ -1229,17 +1231,17 @@ async function renderScheduler(){
         <button class="btn btn-ghost btn-sm" id="nextMonthBtn">次月 →</button>
       </div>
     </div>
-    <p class="desc">今月の希望休 ${reqCount}件を反映して、自動でシフト案を3パターン作成します。最低保証賃金を設定しているスタッフは、稼働可能な範囲で優先的にシフトが追加されます。作成後、表の日付をクリックすると手動調整もできます。</p>
+    <p class="desc">今月の希望休 ${reqCount}件を反映して、自動でシフト案を3パターン作成します。保証時間を設定しているスタッフは、稼働可能な範囲で優先的にシフトが追加されます。作成後、表の日付をクリックすると手動調整もできます。</p>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
       <button class="btn btn-amber" id="genBtn">⚙ 自動でシフト案を3つ作成</button>
       ${meta.status==='draft' ? '<button class="btn btn-primary" id="confirmBtn">✔ このシフトを確定する</button>' : ''}
     </div>
     ${warnings.length ? `<div class="desc" style="color:var(--red); margin-top:12px;">⚠ 危険物取扱者が不足している可能性がある日：${warnings.join('、')}</div>` : ''}
-    ${wageWarnings.length ? `<div class="desc" style="color:var(--red); margin-top:6px;">⚠ 最低保証賃金に届いていない可能性があるスタッフ：${wageWarnings.join('／')}</div>` : ''}
+    ${wageWarnings.length ? `<div class="desc" style="color:var(--red); margin-top:6px;">⚠ 保証時間に届いていない可能性があるスタッフ：${wageWarnings.join('／')}</div>` : ''}
     ${shiftLenWarnings.length ? `<div class="desc" style="color:var(--red); margin-top:6px;">⚠ 最大労働時間（${state.storeSettings.maxShiftHours ?? 11}時間）を超えて調整した日：${shiftLenWarnings.join('、')}</div>` : ''}
     ${understaffedWarnings.length ? `<div class="desc" style="color:var(--red); margin-top:6px; font-weight:700;">🚨 最低人数を割り込んでいる日：${understaffedWarnings.join('、')}</div>` : ''}
     ${excessiveOffWarnings.length ? `<div class="desc" style="color:var(--red); margin-top:6px; font-weight:700;">🚨 希望休が必要休日数を超えている正社員：${excessiveOffWarnings.join('／')}（本人の希望休は尊重していますが、出勤日が大きく減っている可能性があります。内容をご確認ください）</div>` : ''}
-    ${fulltimeDiagList ? `<p class="hint" style="margin-top:8px;">【診断】正社員ごとの今月の希望休（終日）日数：${fulltimeDiagList}</p>` : ''}
+    ${fulltimeDiagList ? `<p class="hint" style="margin-top:8px;">【診断】正社員ごとの今月の休日内訳：${fulltimeDiagList}</p>` : ''}
   </div>
   ${candidatesHtml}
   <div id="candidatePreviewHost"></div>
@@ -1319,7 +1321,15 @@ const GANTT_MIN_DURATION = 60; // バーの最短の長さ（分）
 function ganttSnap(min, step){ return Math.round(min/step)*step; }
 function ganttPct(min){ return ((min-GANTT_START_MIN)/GANTT_TOTAL_MIN*100); }
 
+function addDaysToDs(dsStr, delta){
+  const [yy,mm,dd] = dsStr.split('-').map(Number);
+  const d = new Date(yy, mm-1, dd+delta);
+  return dateStr(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
 async function openDayEditModal(ds){
+  const [dsY, dsM] = ds.split('-').map(Number);
+  state.cursorYear = dsY; state.cursorMonth = dsM - 1; // 月をまたいでもモーダル内の月表示がずれないように同期
   const mk = monthKey(state.cursorYear, state.cursorMonth);
   const schedule = await storeGet('schedule:'+mk) || {};
   const allReq = await storeGet('requests:'+mk) || {};
@@ -1340,7 +1350,13 @@ async function openDayEditModal(ds){
   <div class="modal-backdrop">
     <div class="modal modal-wide">
       <button class="modal-close" id="closeDayModal">×</button>
-      <h3>${ds} のシフト編集</h3>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <h3 style="margin:0;">${ds} のシフト編集</h3>
+        <div style="display:flex; gap:6px;">
+          <button class="btn btn-ghost btn-sm" id="prevDayBtn">← 前日</button>
+          <button class="btn btn-ghost btn-sm" id="nextDayBtn">次日 →</button>
+        </div>
+      </div>
       <p class="hint">バーをドラッグして時間帯を移動、バーの両端をドラッグして時間を伸縮できます。</p>
       <div class="gantt-wrap">
         <div class="gantt-ruler">
@@ -1358,8 +1374,9 @@ async function openDayEditModal(ds){
         <div><input type="time" id="addEnd" value="18:00"></div>
       </div>
       <button class="btn btn-ghost btn-sm" id="addAssignBtn" style="margin-top:8px;">＋ 追加</button>
-      <div style="display:flex; gap:8px; margin-top:20px;">
+      <div style="display:flex; gap:8px; margin-top:20px; flex-wrap:wrap;">
         <button class="btn btn-primary" id="saveDayBtn">この日を保存</button>
+        <button class="btn btn-amber" id="saveNextDayBtn">この日を保存して次の日</button>
         <button class="btn btn-ghost" id="cancelDayBtn">閉じる</button>
       </div>
     </div>
@@ -1456,6 +1473,14 @@ async function openDayEditModal(ds){
 
   document.getElementById('closeDayModal').addEventListener('click', ()=> host.innerHTML='');
   document.getElementById('cancelDayBtn').addEventListener('click', ()=> host.innerHTML='');
+  document.getElementById('prevDayBtn').addEventListener('click', ()=>{
+    host.innerHTML='';
+    openDayEditModal(addDaysToDs(ds, -1));
+  });
+  document.getElementById('nextDayBtn').addEventListener('click', ()=>{
+    host.innerHTML='';
+    openDayEditModal(addDaysToDs(ds, 1));
+  });
   document.getElementById('addAssignBtn').addEventListener('click', ()=>{
     workingEntries.push({
       staffId: document.getElementById('addStaffSel').value,
@@ -1464,16 +1489,25 @@ async function openDayEditModal(ds){
     });
     refreshRows();
   });
-  document.getElementById('saveDayBtn').addEventListener('click', async ()=>{
+  async function saveCurrentDay(){
     const sched = await storeGet('schedule:'+mk) || {};
     sched[ds] = workingEntries;
     await storeSet('schedule:'+mk, sched);
     const meta = await storeGet('schedule_meta:'+mk) || {};
     if(!meta.status || meta.status==='none') meta.status='draft';
     await storeSet('schedule_meta:'+mk, meta);
+  }
+  document.getElementById('saveDayBtn').addEventListener('click', async ()=>{
+    await saveCurrentDay();
     host.innerHTML='';
     renderMain();
     showToast('保存しました');
+  });
+  document.getElementById('saveNextDayBtn').addEventListener('click', async ()=>{
+    await saveCurrentDay();
+    host.innerHTML='';
+    showToast('保存しました');
+    openDayEditModal(addDaysToDs(ds, 1));
   });
 }
 
@@ -1555,6 +1589,7 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
   const forcedRestDays = {}; // staffId -> Set(day番号)
   const excessiveOffWarnings = []; // 希望休が必要休日数を大きく超えているスタッフへの警告
   const requestedOffCounts = {}; // 診断用：スタッフごとの今月の希望休(終日)日数
+  const restDayBreakdown = {}; // 診断用：内訳（希望休/店休/自動/合計/設定値）
   let closedDaysCount = 0;
   for(let d=1; d<=daysInMonth; d++){
     const dow = new Date(y, m, d).getDay();
@@ -1587,6 +1622,7 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
       }
     }
     forcedRestDays[s.id] = set;
+    restDayBreakdown[s.id] = { requested: requestedOffCounts[s.id], closed: closedDaysCount, auto: remaining, total: set.size, required: restCount };
   });
 
   Object.keys(availability).sort().forEach(ds=>{
@@ -1851,9 +1887,8 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
     schedule[ds] = assigned;
   });
 
-  // ---- 最低保証賃金／希望月間労働時間 トップアップパス ----
-  // 稼働時間×時給が最低保証賃金に届いていない、または希望する月間総労働時間に届いていない
-  // スタッフには、まだ入っていない稼働可能日を追加でシフトに組み込む。
+  // ---- 保証時間 トップアップパス ----
+  // 保証時間に届いていないパート・学生には、まだ入っていない稼働可能日を追加でシフトに組み込む。
   // ただし「理想人数を超えない」ことを優先するため、その日その時間帯が既に理想人数に
   // 達している場合は追加しない（コストを抑えるため。届かない分は警告で伝える）
   function hourlyCoverageOf(ds){
@@ -1865,11 +1900,7 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
   }
   const wageWarnings = [];
   state.staffList.forEach(s=>{
-    const wage = Number(s.hourlyWage) || 0;
-    const guarantee = Number(s.minGuaranteeWage) || 0;
-    const desiredHours = Number(s.desiredMonthlyHours) || 0;
-    const guaranteeImpliedHours = (guarantee > 0 && wage > 0) ? guarantee/wage : 0;
-    const targetHours = Math.max(desiredHours, guaranteeImpliedHours);
+    const targetHours = Number(s.guaranteedMonthlyHours) || 0;
     if(targetHours <= 0) return;
     let currentHours = runningHours[s.id]||0;
     if(currentHours >= targetHours) return;
@@ -1898,16 +1929,11 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
       currentHours += hrs;
     }
     if(currentHours < targetHours){
-      const currentWage = currentHours*wage;
-      if(guarantee>0 && wage>0 && currentWage < guarantee){
-        wageWarnings.push(`${s.name}（あと約${Math.round(guarantee-currentWage).toLocaleString()}円分の勤務が必要ですが、理想人数を超えずには増やせません）`);
-      } else if(desiredHours>0){
-        wageWarnings.push(`${s.name}（希望の月間労働時間まであと約${Math.round((targetHours-currentHours)*10)/10}時間分、理想人数を超えずには増やせません）`);
-      }
+      wageWarnings.push(`${s.name}（保証時間まであと約${Math.round((targetHours-currentHours)*10)/10}時間分、理想人数を超えずには増やせません）`);
     }
   });
 
-  return { schedule, warningDays, shiftLengthWarningDays, understaffedWarningDays, excessiveOffWarnings, requestedOffCounts, runningHours, wageWarnings };
+  return { schedule, warningDays, shiftLengthWarningDays, understaffedWarningDays, excessiveOffWarnings, requestedOffCounts, restDayBreakdown, runningHours, wageWarnings };
 }
 
 function computeCandidateStats(result){
@@ -1941,7 +1967,7 @@ async function generateCandidates(){
   const candidates = CANDIDATE_VARIANTS.map(v=>{
     const result = generateOneSchedule(v.key, y, m, allReq, monthlyRequiredDaysOff);
     const stats = computeCandidateStats(result);
-    return { key:v.key, label:v.label, desc:v.desc, schedule:result.schedule, warningDays:result.warningDays, wageWarnings:result.wageWarnings, shiftLengthWarningDays:result.shiftLengthWarningDays, understaffedWarningDays:result.understaffedWarningDays, excessiveOffWarnings:result.excessiveOffWarnings, requestedOffCounts:result.requestedOffCounts, stats };
+    return { key:v.key, label:v.label, desc:v.desc, schedule:result.schedule, warningDays:result.warningDays, wageWarnings:result.wageWarnings, shiftLengthWarningDays:result.shiftLengthWarningDays, understaffedWarningDays:result.understaffedWarningDays, excessiveOffWarnings:result.excessiveOffWarnings, requestedOffCounts:result.requestedOffCounts, restDayBreakdown:result.restDayBreakdown, stats };
   });
   await storeSet('schedule_candidates:'+mk, candidates);
   return candidates;
@@ -1954,7 +1980,7 @@ async function adoptCandidate(candidateKey){
   const chosen = candidates.find(c=>c.key===candidateKey);
   if(!chosen) return;
   await storeSet('schedule:'+mk, chosen.schedule);
-  await storeSet('schedule_meta:'+mk, { status:'draft', generatedAt: new Date().toISOString(), warnings: chosen.warningDays, wageWarnings: chosen.wageWarnings || [], shiftLengthWarningDays: chosen.shiftLengthWarningDays || [], understaffedWarningDays: chosen.understaffedWarningDays || [], excessiveOffWarnings: chosen.excessiveOffWarnings || [], requestedOffCounts: chosen.requestedOffCounts || {}, adoptedVariant: chosen.key });
+  await storeSet('schedule_meta:'+mk, { status:'draft', generatedAt: new Date().toISOString(), warnings: chosen.warningDays, wageWarnings: chosen.wageWarnings || [], shiftLengthWarningDays: chosen.shiftLengthWarningDays || [], understaffedWarningDays: chosen.understaffedWarningDays || [], excessiveOffWarnings: chosen.excessiveOffWarnings || [], requestedOffCounts: chosen.requestedOffCounts || {}, restDayBreakdown: chosen.restDayBreakdown || {}, adoptedVariant: chosen.key });
   await storeSet('schedule_candidates:'+mk, []); // 採用後は候補をクリア
 }
 
