@@ -1225,6 +1225,10 @@ async function renderScheduler(){
   ` : '';
 
   const gridView = renderScheduleGrid(schedule, allReq);
+  const staleGridNotice = candidates.length ? `
+  <div class="panel" style="background:#FBF0E2; border-color:var(--amber);">
+    <p class="desc" style="color:var(--amber-dark); font-weight:700; margin:0;">⚠ 下の「スタッフ別シフト表」は、まだ以前に確定・採用したシフトのままです。上に表示されている3つの案のいずれかで「この案を採用する」を押すと、この表が新しい内容に更新されます。</p>
+  </div>` : '';
   return `
   <div class="panel">
     <div class="cal-header">
@@ -1247,6 +1251,7 @@ async function renderScheduler(){
     ${fulltimeDiagList ? `<p class="hint" style="margin-top:8px;">【診断】正社員ごとの今月の休日内訳：${fulltimeDiagList}</p>` : ''}
   </div>
   ${candidatesHtml}
+  ${staleGridNotice}
   <div id="candidatePreviewHost"></div>
   ${gridView}
   <div id="dayModalHost"></div>
@@ -1625,7 +1630,7 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
       }
     }
     forcedRestDays[s.id] = set;
-    restDayBreakdown[s.id] = { requested: requestedOffCounts[s.id], closed: closedDaysCount, auto: remaining, total: set.size, required: restCount };
+    restDayBreakdown[s.id] = { requested: requestedOffCounts[s.id], closed: closedDaysCount, auto: remaining, total: set.size + closedDaysCount, required: restCount };
   });
 
   Object.keys(availability).sort().forEach(ds=>{
