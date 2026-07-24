@@ -1695,10 +1695,10 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
     // 割当を1件試みる共通処理。capMin=このシフトで許容する最大の長さ。allowOT=正社員の残業を許すか
     // fixedWindow指定時は、そのおおよその時間帯（開店・閉店固定用）で配置を試みる
     // mandatory=trueの場合、需要が無くても配置する（正社員は休日以外は必ず出勤するため）
-    function attemptAssign(cand, capMin, allowOT, fixedWindow, mandatory){
+    function attemptAssign(cand, capMin, allowOT, fixedWindow, mandatory, forceAssign){
       const fullHrs = hoursInRange(cand.start, cand.end);
       const helpsIdeal = fullHrs.some(h=> coverage[h] < (req[h]??0));
-      if(!fixedWindow && !helpsIdeal && !cand.staff.isNewbie && !mandatory) return null;
+      if(!fixedWindow && !helpsIdeal && !cand.staff.isNewbie && !mandatory && !forceAssign) return null;
       let assignStart = cand.start, assignEnd = cand.end;
       const fullLen = cand.end - cand.start;
 
@@ -1862,6 +1862,24 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
       parttimeCands.sort((a,b)=> (runningHours[a.staff.id]-runningHours[b.staff.id]) + (rng()-0.5)*6);
     }
     parttimeCands.forEach(cand=> attemptAssign(cand, maxShiftMin, false));
+
+    // フェーズ2.5：それでもまだ足りない場合、正社員の残業より先に、
+    // まだ入っていないパート・学生を「理想人数を超えてでも」追加投入する。
+    // （社員に残業させるくらいなら、パートを増やす方を優先するため）
+    let stillShortBeforeOT = HOURS.some(h=> (req[h]??0) > 0 && (coverage[h]||0) < (req[h]??0));
+    if(stillShortBeforeOT){
+      const extraParttimeCands = available.filter(c=> c.staff.employment!=='fulltime' && !assignedIds.has(c.staff.id));
+      if(variantKey === 'B'){
+        extraParttimeCands.sort((a,b)=>{
+          const hz = (b.staff.hazmat?1:0) - (a.staff.hazmat?1:0);
+          if(hz !== 0) return hz;
+          return (runningHours[a.staff.id]-runningHours[b.staff.id]) + (rng()-0.5)*6;
+        });
+      } else {
+        extraParttimeCands.sort((a,b)=> (runningHours[a.staff.id]-runningHours[b.staff.id]) + (rng()-0.5)*6);
+      }
+      extraParttimeCands.forEach(cand=> attemptAssign(cand, maxShiftMin, false, null, false, true));
+    }
 
     // フェーズ3：それでもまだ足りない時間帯があれば、最終手段として正社員の残業を許容する。
     // まずは既に入っている正社員の勤務時間を伸ばし、それでも足りなければ新たに正社員を残業で投入する
