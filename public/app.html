@@ -1777,8 +1777,13 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
 
       if(cand.staff.employment === 'fulltime'){
         const dailyOT = Math.max(0, (assignEnd-assignStart)/60 - 9);
-        if(dailyOT > 0 && !allowOT) return null;
-        if(monthlyOT[cand.staff.id] + dailyOT > effectiveOTCap(cand.staff)) return null;
+        // 残業（dailyOT>0）が発生する場合だけ、残業ルール・残業上限をチェックする。
+        // 残業ゼロの通常出勤は、それまでの累計残業時間に関係なく必ず許可する
+        // （そうしないと、月の前半で残業上限に達した人が、その後ずっと出勤扱いされなくなってしまう）
+        if(dailyOT > 0){
+          if(!allowOT) return null;
+          if(monthlyOT[cand.staff.id] + dailyOT > effectiveOTCap(cand.staff)) return null;
+        }
       }
       if(cand.staff.isNewbie){
         const hasFulltimeOverlap = assigned.some(a=>{
