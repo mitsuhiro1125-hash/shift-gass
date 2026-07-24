@@ -621,7 +621,7 @@ function openStaffModal(id){
         <div class="field"><label>保証時間（月間・時間）</label><input type="number" min="0" step="1" id="f_guaranteedhours" value="${s.guaranteedMonthlyHours ?? 0}"></div>
         <div class="field"><label>上限時間（月間・時間）</label><input type="number" min="0" step="1" id="f_maxhours" value="${s.maxMonthlyHours ?? 0}"></div>
       </div>
-      <p id="wageHint" class="hint" style="margin-top:-8px; display:${s.employment==='fulltime'?'none':'block'};">保証時間を入力すると、できるだけその時間数に届くよう優先的にシフトが追加されます。上限時間を入力すると、社会保険の加入基準などを踏まえて、それ以上は働かせないようにします（どちらも0なら指定なし）。</p>
+      <p id="wageHint" class="hint" style="margin-top:-8px; display:${s.employment==='fulltime'?'none':'block'};">保証時間を入力すると、できるだけその時間数に届くよう優先的にシフトが追加されます。上限時間を入力すると、社会保険の加入基準などを踏まえて、それ以上は働かせないようにします（どちらも0なら指定なし）。休みの日数は、正社員と共通の「必要休日数」（月次設定）が適用されます。</p>
       <div id="fulltimeFields" style="display:${s.employment==='fulltime'?'block':'none'};">
         <div class="row">
           <div class="field" style="max-width:220px;">
@@ -633,7 +633,7 @@ function openStaffModal(id){
           <input type="checkbox" id="f_otprohibited" ${s.otProhibited?'checked':''}> 残業不可（1日9時間を超える勤務をさせない）
         </label>
       </div>
-      <p id="fulltimeHint" class="hint" style="margin-top:6px; display:${s.employment==='fulltime'?'block':'none'};">正社員の必要休日数は、スタッフ個人ではなく「月次設定」で毎月まとめて設定します。</p>
+      <p id="fulltimeHint" class="hint" style="margin-top:6px; display:${s.employment==='fulltime'?'block':'none'};">必要休日数は、スタッフ個人ではなく「月次設定」で毎月まとめて設定します（正社員・パート共通の値です）。</p>
       <div class="day-toggle-row">
         <label><input type="checkbox" id="f_hazmat" ${s.hazmat?'checked':''}> 危険物取扱資格あり</label>
         <label><input type="checkbox" id="f_newbie" ${s.isNewbie?'checked':''}> 新人（社員がいる時のみ配置）</label>
@@ -796,13 +796,13 @@ async function renderMonthSettings(){
   </div>
   <div class="panel">
     <div class="cal-header">
-      <h2 style="margin:0;">正社員の必要休日数（${year}年）</h2>
+      <h2 style="margin:0;">必要休日数（正社員・パート共通、${year}年）</h2>
       <div class="cal-nav">
         <button class="btn btn-ghost btn-sm" id="prevYearBtn">← 前年</button>
         <button class="btn btn-ghost btn-sm" id="nextYearBtn">翌年 →</button>
       </div>
     </div>
-    <p class="desc">月によって日数が変わるため、月ごとに設定します（全正社員共通の値です。個人ごとには設定しません）。自動シフト作成では、正社員がこの日数以上、月内に休みを確保できるようにします。</p>
+    <p class="desc">月によって日数が変わるため、月ごとに設定します（正社員・パート共通の値です。個人ごとには設定しません）。自動シフト作成では、全スタッフがこの日数以上、月内に休みを確保できるようにします（正社員はこれ以外の日は原則出勤、パートは希望休が無くてもこの日数分は自動的に休みになります）。</p>
     <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:10px;">
       ${monthLabels.map((label,i)=>`
         <div>
@@ -1204,7 +1204,7 @@ async function renderScheduler(){
   const understaffedWarnings = meta.understaffedWarningDays || [];
   const excessiveOffWarnings = meta.excessiveOffWarnings || [];
   const restDayBreakdown = meta.restDayBreakdown || {};
-  const fulltimeDiagList = state.staffList.filter(s=>s.employment==='fulltime')
+  const fulltimeDiagList = state.staffList
     .map(s=>{
       const b = restDayBreakdown[s.id];
       if(!b) return `${escapeHtml(s.name)}: -`;
@@ -1297,7 +1297,7 @@ async function renderScheduler(){
     ${shiftLenWarnings.length ? `<div class="desc" style="color:var(--red); margin-top:6px;">⚠ 最大労働時間（${state.storeSettings.maxShiftHours ?? 11}時間）を超えて調整した日：${shiftLenWarnings.join('、')}</div>` : ''}
     ${understaffedWarnings.length ? `<div class="desc" style="color:var(--red); margin-top:6px; font-weight:700;">🚨 最低人数を割り込んでいる日：${understaffedWarnings.join('、')}</div>` : ''}
     ${excessiveOffWarnings.length ? `<div class="desc" style="color:var(--red); margin-top:6px; font-weight:700;">🚨 希望休が必要休日数を超えている正社員：${excessiveOffWarnings.join('／')}（本人の希望休は尊重していますが、出勤日が大きく減っている可能性があります。内容をご確認ください）</div>` : ''}
-    ${fulltimeDiagList ? `<p class="hint" style="margin-top:8px;">【診断】正社員ごとの今月の休日内訳：${fulltimeDiagList}</p>` : ''}
+    ${fulltimeDiagList ? `<p class="hint" style="margin-top:8px;">【診断】スタッフごとの今月の休日内訳（正社員・パート共通の必要休日数を適用）：${fulltimeDiagList}</p>` : ''}
     ${detailedDiagHtml}
   </div>
   ${candidatesHtml}
@@ -1682,17 +1682,21 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
     restDayBreakdown[s.id] = { requested: requestedOffCounts[s.id], closed: closedDaysCount, auto: remaining, total: set.size + closedDaysCount, required: restCount };
   });
 
-  // パート・学生も、希望休が無くても最低8日は休めるようにする
-  // （需要ドリブンで毎日入れられてしまうのを防ぐための下限）
-  const PARTTIME_MIN_REST_DAYS = 8;
+  // パート・学生も、正社員と同じ「月次設定」の必要休日数を参照する
+  // （希望休が無くても、この日数分は自動で休みが確保される）
   const nonFulltimeStaffList = state.staffList.filter(s=> s.employment !== 'fulltime');
   nonFulltimeStaffList.forEach((s, idx)=>{
+    const restCount = Number(monthlyRequiredDaysOff)||0;
     const set = new Set();
     (allReq[s.id]||[]).filter(r=>r.allDay).forEach(r=>{
       const d = Number(r.date.split('-')[2]);
       if(!Number.isNaN(d)) set.add(d);
     });
-    const remaining = Math.max(0, PARTTIME_MIN_REST_DAYS - closedDaysCount - set.size);
+    requestedOffCounts[s.id] = set.size;
+    if(set.size + closedDaysCount > restCount){
+      excessiveOffWarnings.push(`${s.name}（希望休${set.size}日＋店休${closedDaysCount}日で、必要休日数${restCount}日を超えています）`);
+    }
+    const remaining = Math.max(0, restCount - closedDaysCount - set.size);
     if(remaining > 0){
       const interval = daysInMonth / (remaining + 1);
       const offset = (idx * interval) / Math.max(1, nonFulltimeStaffList.length);
@@ -1706,6 +1710,7 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
       }
     }
     forcedRestDays[s.id] = set;
+    restDayBreakdown[s.id] = { requested: requestedOffCounts[s.id], closed: closedDaysCount, auto: remaining, total: set.size + closedDaysCount, required: restCount };
   });
 
   Object.keys(availability).sort().forEach(ds=>{
