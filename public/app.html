@@ -2020,6 +2020,10 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
     const candidateDates = Object.keys(availability).filter(ds=>{
       const info = availability[ds];
       if(info.closed) return false;
+      // 休日ルール（最低休日数）を保証時間より優先する。休日に指定されている日は追加しない
+      const dayNum = Number(ds.split('-')[2]);
+      const restDays = forcedRestDays[s.id];
+      if(restDays && restDays.has(dayNum)) return false;
       const already = (schedule[ds]||[]).some(e=>e.staffId===s.id);
       if(already) return false;
       return info.list.some(item=>item.staffId===s.id);
