@@ -333,6 +333,15 @@ function showToast(msg){
   render();
   setTimeout(()=>{ state.toast = null; render(); }, 2200);
 }
+// 全体の再描画（render()）を伴わない軽量なトースト。
+// モーダルを開いたまま通知だけ出したい場合（保存して次の日、など）に使う
+function showToastLight(msg){
+  document.querySelectorAll('.toast').forEach(el=> el.remove());
+  const t = document.createElement('div');
+  t.className='toast'; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>{ t.remove(); }, 2200);
+}
 
 /* ============================= INIT ============================= */
 async function init(){
@@ -973,7 +982,14 @@ async function toggleRequest(dateStr, reqOrNull, staffId, skipRerender){
   if(reqOrNull) filtered.push(reqOrNull);
   allReq[targetId] = filtered;
   await storeSet('requests:'+mk, allReq);
-  if(!skipRerender) renderMain();
+  if(!skipRerender){
+    // 再描画のたびにリストが先頭にスクロールされてしまわないよう、スクロール位置を保持する
+    const listEl = document.querySelector('.day-list');
+    const scrollTop = listEl ? listEl.scrollTop : 0;
+    await renderMain();
+    const newListEl = document.querySelector('.day-list');
+    if(newListEl) newListEl.scrollTop = scrollTop;
+  }
 }
 
 /* ============================= 5. マイシフト（スタッフ閲覧） ============================= */
@@ -1542,14 +1558,13 @@ async function openDayEditModal(ds){
   document.getElementById('saveDayBtn').addEventListener('click', async ()=>{
     await saveCurrentDay();
     host.innerHTML='';
-    renderMain();
-    showToast('保存しました');
+    await renderMain();
+    showToastLight('保存しました');
   });
   document.getElementById('saveNextDayBtn').addEventListener('click', async ()=>{
     await saveCurrentDay();
-    host.innerHTML='';
-    showToast('保存しました');
-    openDayEditModal(addDaysToDs(ds, 1));
+    showToastLight('保存しました');
+    await openDayEditModal(addDaysToDs(ds, 1));
   });
 }
 
@@ -1667,6 +1682,32 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
     restDayBreakdown[s.id] = { requested: requestedOffCounts[s.id], closed: closedDaysCount, auto: remaining, total: set.size + closedDaysCount, required: restCount };
   });
 
+  // パート・学生も、希望休が無くても最低8日は休めるようにする
+  // （需要ドリブンで毎日入れられてしまうのを防ぐための下限）
+  const PARTTIME_MIN_REST_DAYS = 8;
+  const nonFulltimeStaffList = state.staffList.filter(s=> s.employment !== 'fulltime');
+  nonFulltimeStaffList.forEach((s, idx)=>{
+    const set = new Set();
+    (allReq[s.id]||[]).filter(r=>r.allDay).forEach(r=>{
+      const d = Number(r.date.split('-')[2]);
+      if(!Number.isNaN(d)) set.add(d);
+    });
+    const remaining = Math.max(0, PARTTIME_MIN_REST_DAYS - closedDaysCount - set.size);
+    if(remaining > 0){
+      const interval = daysInMonth / (remaining + 1);
+      const offset = (idx * interval) / Math.max(1, nonFulltimeStaffList.length);
+      for(let i=1; i<=remaining; i++){
+        let day = Math.round(offset + i*interval);
+        day = Math.max(1, Math.min(daysInMonth, day));
+        let attempts = 0;
+        const isClosedDay = (dd2)=> state.storeSettings.closedWeekdays.includes(new Date(y,m,dd2).getDay());
+        while((set.has(day) || isClosedDay(day)) && attempts < daysInMonth){ day = (day % daysInMonth) + 1; attempts++; }
+        set.add(day);
+      }
+    }
+    forcedRestDays[s.id] = set;
+  });
+
   Object.keys(availability).sort().forEach(ds=>{
     const dayInfo = availability[ds];
     if(dayInfo.closed) return;
@@ -1675,8 +1716,7 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
     let available = dayInfo.list.map(item=>({
       staff: state.staffList.find(x=>x.id===item.staffId), start:item.start, end:item.end
     })).filter(x=>x.staff).filter(x=>{
-      // 正社員は、月内に均等配置された「必要休日数」の日は稼働不可とする
-      if(x.staff.employment !== 'fulltime') return true;
+      // 正社員・パートともに、月内に均等配置された休日は稼働不可とする
       const restDays = forcedRestDays[x.staff.id];
       return !restDays || !restDays.has(dd);
     });
@@ -1968,15 +2008,7 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
 
   // ---- 保証時間 トップアップパス ----
   // 保証時間に届いていないパート・学生には、まだ入っていない稼働可能日を追加でシフトに組み込む。
-  // ただし「理想人数を超えない」ことを優先するため、その日その時間帯が既に理想人数に
-  // 達している場合は追加しない（コストを抑えるため。届かない分は警告で伝える）
-  function hourlyCoverageOf(ds){
-    const cov = {}; HOURS.forEach(h=> cov[h]=0);
-    (schedule[ds]||[]).forEach(e=>{
-      hoursInRange(toMin(e.start), toMin(e.end)).forEach(h=> cov[h]=(cov[h]||0)+1);
-    });
-    return cov;
-  }
+  // 「保証時間の確保」は「理想人数を超えない」ルールより優先する（届かない分だけ警告で伝える）
   const wageWarnings = [];
   state.staffList.forEach(s=>{
     const targetHours = Number(s.guaranteedMonthlyHours) || 0;
@@ -2005,9 +2037,7 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
         if(remainingMin < 60) break;
         if(cappedEnd - item.start > remainingMin) cappedEnd = item.start + remainingMin;
       }
-      const cov = hourlyCoverageOf(ds);
-      const wouldExceedIdeal = hoursInRange(item.start, cappedEnd).some(h=> (cov[h]||0) >= (req[h]??0));
-      if(wouldExceedIdeal) continue; // この日は理想人数を超えてしまうためスキップ
+      // 保証時間の確保は「理想人数を超えない」ルールより優先する
       if(!schedule[ds]) schedule[ds] = [];
       schedule[ds].push({ staffId:s.id, start:toTimeStr(item.start), end:toTimeStr(cappedEnd) });
       const hrs = (cappedEnd-item.start)/60;
@@ -2015,7 +2045,7 @@ function generateOneSchedule(variantKey, y, m, allReq, monthlyRequiredDaysOff){
       currentHours += hrs;
     }
     if(currentHours < targetHours){
-      wageWarnings.push(`${s.name}（保証時間まであと約${Math.round((targetHours-currentHours)*10)/10}時間分、理想人数を超えずには増やせません）`);
+      wageWarnings.push(`${s.name}（保証時間まであと約${Math.round((targetHours-currentHours)*10)/10}時間分、稼働可能な日が足りません）`);
     }
   });
 
